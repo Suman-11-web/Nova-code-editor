@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AppViewModel
+import com.example.ui.components.HomeNavigationButton
+import com.example.ui.components.RunActionButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -207,6 +209,24 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         }
                     }
                 }
+            }
+
+            // Quick Actions bottom bar
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HomeNavigationButton(
+                    viewModel = viewModel,
+                    modifier = Modifier.weight(1f)
+                )
+                RunActionButton(
+                    viewModel = viewModel,
+                    enabled = activeTab != null && !isRunning,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
