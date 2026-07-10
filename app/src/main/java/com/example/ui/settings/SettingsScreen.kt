@@ -30,6 +30,7 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     val wordWrap = viewModel.wordWrap
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             Column {
                 TopAppBar(
@@ -53,7 +54,7 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
     ) { innerPadding ->
         LazyColumn(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
@@ -229,6 +230,105 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         ShortcutRow("Ctrl + Z", "Undo last editor change")
                         ShortcutRow("Ctrl + Y", "Redo reverted editor change")
                         ShortcutRow("Ctrl + F", "Search and replace in file")
+                    }
+                }
+            }
+
+            // SECTION: Workspace & Web Server
+            item {
+                Text(
+                    text = "Workspace & Web Server",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            item {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Storage setting Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Use System Storage",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (viewModel.useExternalStorage) 
+                                        "Workspace: External SDCard/NovaProjects" 
+                                        else "Workspace: Private Internal Storage",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = viewModel.useExternalStorage,
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        viewModel.setStorageSource(true, context)
+                                    } else {
+                                        viewModel.setStorageSource(false, context)
+                                    }
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), thickness = 0.5.dp)
+
+                        // Web server setting Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Localhost HTTP Web Server",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (viewModel.isLocalServerRunning) 
+                                        "Status: Active on http://localhost:${viewModel.localServerPort}" 
+                                        else "Status: Inactive",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    if (viewModel.isLocalServerRunning) {
+                                        viewModel.stopLocalServer()
+                                    } else {
+                                        viewModel.startLocalServer()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (viewModel.isLocalServerRunning) 
+                                        MaterialTheme.colorScheme.error 
+                                        else MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text(
+                                    text = if (viewModel.isLocalServerRunning) "Stop" else "Start",
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                     }
                 }
             }

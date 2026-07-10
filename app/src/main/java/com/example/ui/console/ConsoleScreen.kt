@@ -36,6 +36,7 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     val errorScrollState = rememberScrollState()
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             Column {
                 TopAppBar(

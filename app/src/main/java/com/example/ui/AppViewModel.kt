@@ -2,9 +2,15 @@ package com.example.ui
 
 import android.app.Application
 import android.os.Environment
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.EditorTab
@@ -12,6 +18,7 @@ import com.example.data.NovaDatabase
 import com.example.data.NovaRepository
 import com.example.data.RecentFile
 import com.example.ui.editor.EditorTheme
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import java.net.InetSocketAddress
 import java.util.Stack
 
 enum class Screen {
@@ -45,8 +53,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var openTabs by mutableStateOf<List<EditorTab>>(emptyList())
         private set
     
-    var activeTab by mutableStateOf<EditorTab?>(null)
+    var editorTextFieldValue by mutableStateOf(TextFieldValue(""))
         private set
+
+    private var _activeTab by mutableStateOf<EditorTab?>(null)
+    var activeTab: EditorTab?
+        get() = _activeTab
+        private set(value) {
+            _activeTab = value
+            if (value != null) {
+                if (editorTextFieldValue.text != value.content) {
+                    editorTextFieldValue = TextFieldValue(value.content, selection = TextRange(value.content.length))
+                }
+            } else {
+                editorTextFieldValue = TextFieldValue("")
+            }
+        }
 
     var fontSize by mutableStateOf(14f)
     var wordWrap by mutableStateOf(false)
@@ -120,6 +142,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        
+        // Start local server
+        startLocalServer()
     }
 
     private fun createStarterSampleFiles() {
@@ -190,6 +215,224 @@ console.log(area);
     // Navigation trigger
     fun navigateTo(screen: Screen) {
         currentScreen = screen
+    }
+
+    // Local Host Server and Storage States
+    private var httpServer: HttpServer? = null
+    var localServerPort by mutableStateOf(8080)
+    var isLocalServerRunning by mutableStateOf(false)
+    var useExternalStorage by mutableStateOf(false)
+    
+    // Web Preview States
+    var showWebPreview by mutableStateOf(false)
+    var webPreviewUrl by mutableStateOf("")
+
+    fun startLocalServer() {
+        if (isLocalServerRunning) return
+        try {
+            val server = HttpServer.create(InetSocketAddress("127.0.0.1", 8080), 0)
+            server.createContext("/") { exchange ->
+                val path = exchange.requestURI.path
+                val file = File(currentDirectory, path.removePrefix("/"))
+                
+                if (file.exists() && file.isFile) {
+                    val bytes = file.readBytes()
+                    val mimeType = when (file.extension.lowercase()) {
+                        "html", "htm" -> "text/html"
+                        "css" -> "text/css"
+                        "js" -> "application/javascript"
+                        "json" -> "application/json"
+                        "png" -> "image/png"
+                        "jpg", "jpeg" -> "image/jpeg"
+                        "gif" -> "image/gif"
+                        "svg" -> "image/svg+xml"
+                        else -> "text/plain"
+                    }
+                    exchange.responseHeaders.set("Content-Type", mimeType)
+                    exchange.sendResponseHeaders(200, bytes.size.toLong())
+                    exchange.responseBody.use { os ->
+                        os.write(bytes)
+                    }
+                } else {
+                    val indexFile = File(file, "index.html")
+                    if (file.isDirectory && indexFile.exists()) {
+                        val bytes = indexFile.readBytes()
+                        exchange.responseHeaders.set("Content-Type", "text/html")
+                        exchange.sendResponseHeaders(200, bytes.size.toLong())
+                        exchange.responseBody.use { os ->
+                            os.write(bytes)
+                        }
+                    } else {
+                        val response = "404 Not Found: ${file.name}".toByteArray()
+                        exchange.sendResponseHeaders(404, response.size.toLong())
+                        exchange.responseBody.use { os ->
+                            os.write(response)
+                        }
+                    }
+                }
+            }
+            server.executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+            server.start()
+            httpServer = server
+            isLocalServerRunning = true
+            localServerPort = 8080
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Try random free port
+            try {
+                val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+                server.createContext("/") { exchange ->
+                    val path = exchange.requestURI.path
+                    val file = File(currentDirectory, path.removePrefix("/"))
+                    if (file.exists() && file.isFile) {
+                        val bytes = file.readBytes()
+                        val mimeType = when (file.extension.lowercase()) {
+                            "html", "htm" -> "text/html"
+                            "css" -> "text/css"
+                            "js" -> "application/javascript"
+                            "json" -> "application/json"
+                            "png" -> "image/png"
+                            "jpg", "jpeg" -> "image/jpeg"
+                            "gif" -> "image/gif"
+                            "svg" -> "image/svg+xml"
+                            else -> "text/plain"
+                        }
+                        exchange.responseHeaders.set("Content-Type", mimeType)
+                        exchange.sendResponseHeaders(200, bytes.size.toLong())
+                        exchange.responseBody.use { os ->
+                            os.write(bytes)
+                        }
+                    } else {
+                        val indexFile = File(file, "index.html")
+                        if (file.isDirectory && indexFile.exists()) {
+                            val bytes = indexFile.readBytes()
+                            exchange.responseHeaders.set("Content-Type", "text/html")
+                            exchange.sendResponseHeaders(200, bytes.size.toLong())
+                            exchange.responseBody.use { os ->
+                                os.write(bytes)
+                            }
+                        } else {
+                            val response = "404 Not Found".toByteArray()
+                            exchange.sendResponseHeaders(404, response.size.toLong())
+                            exchange.responseBody.use { os ->
+                                os.write(response)
+                            }
+                        }
+                    }
+                }
+                server.executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+                server.start()
+                httpServer = server
+                isLocalServerRunning = true
+                localServerPort = server.address.port
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+
+    fun stopLocalServer() {
+        httpServer?.stop(0)
+        httpServer = null
+        isLocalServerRunning = false
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopLocalServer()
+    }
+
+    // Storage access configuration
+    fun setStorageSource(external: Boolean, context: android.content.Context) {
+        if (external) {
+            if (hasStoragePermission(context)) {
+                useExternalStorage = true
+                currentDirectory = File(Environment.getExternalStorageDirectory(), "NovaProjects")
+                if (!currentDirectory.exists()) {
+                    currentDirectory.mkdirs()
+                }
+                refreshFileTree()
+            }
+        } else {
+            useExternalStorage = false
+            currentDirectory = File(getApplication<Application>().filesDir, "NovaProjects")
+            if (!currentDirectory.exists()) {
+                currentDirectory.mkdirs()
+            }
+            refreshFileTree()
+        }
+    }
+    
+    fun hasStoragePermission(context: android.content.Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    // Professional Code Editor Logic
+    fun updateEditorTextFieldValue(newValue: TextFieldValue) {
+        val currentActive = activeTab ?: return
+        var adjustedValue = newValue
+        val text = newValue.text
+        
+        // HTML Auto-closing tags feature
+        val oldText = currentActive.content
+        if (text.length == oldText.length + 1) {
+            val selectionStart = newValue.selection.start
+            val typedCharIndex = selectionStart - 1
+            if (typedCharIndex in text.indices && text[typedCharIndex] == '>') {
+                val isHtml = currentActive.fileName.lowercase().endsWith(".html") || currentActive.fileName.lowercase().endsWith(".htm")
+                if (isHtml) {
+                    var leftAngleIndex = -1
+                    for (i in (typedCharIndex - 1) downTo 0) {
+                        if (text[i] == '>') break
+                        if (text[i] == '<') {
+                            leftAngleIndex = i
+                            break
+                        }
+                    }
+                    if (leftAngleIndex != -1) {
+                        val tagContent = text.substring(leftAngleIndex + 1, typedCharIndex).trim()
+                        if (tagContent.isNotEmpty() && !tagContent.startsWith("/") && !tagContent.endsWith("/")) {
+                            val tagName = tagContent.split(Regex("\\s+"))[0].filter { it.isLetterOrDigit() }
+                            if (tagName.isNotEmpty()) {
+                                val closeTag = "</$tagName>"
+                                val newText = text.substring(0, typedCharIndex + 1) + closeTag + text.substring(typedCharIndex + 1)
+                                adjustedValue = TextFieldValue(
+                                    text = newText,
+                                    selection = TextRange(typedCharIndex + 1)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        editorTextFieldValue = adjustedValue
+        updateActiveTabContent(adjustedValue.text)
+    }
+
+    fun insertTextAtCursor(insertedText: String) {
+        val currentText = editorTextFieldValue.text
+        val selection = editorTextFieldValue.selection
+        val start = selection.start
+        val end = selection.end
+        
+        val newText = currentText.substring(0, start) + insertedText + currentText.substring(end)
+        val newCursorPos = start + insertedText.length
+        
+        updateEditorTextFieldValue(
+            TextFieldValue(
+                text = newText,
+                selection = TextRange(newCursorPos)
+            )
+        )
     }
 
     // ----------------------------------------------------
@@ -618,6 +861,25 @@ console.log(area);
             consoleOutput = "No file open to run!\nCreate or open a file first."
             consoleError = "Error: Editor is empty"
             navigateTo(Screen.CONSOLE)
+            return
+        }
+
+        // Check if HTML or Web code
+        val lang = tab.language.lowercase()
+        val ext = tab.fileName.substringAfterLast('.', "").lowercase()
+        if (lang == "html" || lang == "css" || lang == "javascript" || ext == "html" || ext == "htm" || ext == "js" || ext == "css") {
+            // Force save current state first
+            saveCurrentFile()
+            
+            // Ensure local server is running
+            if (!isLocalServerRunning) {
+                startLocalServer()
+            }
+            
+            // Open local WebView preview!
+            val fileName = tab.fileName
+            webPreviewUrl = "http://127.0.0.1:$localServerPort/$fileName"
+            showWebPreview = true
             return
         }
 

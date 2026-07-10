@@ -58,6 +58,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     var saveAsName by remember { mutableStateOf("") }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             Column(modifier = Modifier.background(theme.background)) {
                 // Top control bar
@@ -365,8 +366,8 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             .padding(12.dp)
                     ) {
                         BasicTextField(
-                            value = codeText,
-                            onValueChange = { viewModel.updateActiveTabContent(it) },
+                            value = viewModel.editorTextFieldValue,
+                            onValueChange = { viewModel.updateEditorTextFieldValue(it) },
                             textStyle = TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = viewModel.fontSize.sp,
@@ -405,9 +406,9 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 .background(Color(0xFF49454F).copy(alpha = 0.3f), shape = RoundedCornerShape(4.dp))
                                 .clickable {
                                     if (symbol == "TAB") {
-                                        viewModel.updateActiveTabContent(activeTab.content + "    ")
+                                        viewModel.insertTextAtCursor("    ")
                                     } else {
-                                        viewModel.updateActiveTabContent(activeTab.content + symbol)
+                                        viewModel.insertTextAtCursor(symbol)
                                     }
                                 }
                                 .padding(horizontal = 12.dp),

@@ -47,6 +47,7 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     var fileActionMenuTarget by remember { mutableStateOf<File?>(null) }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             Column {
                 TopAppBar(
