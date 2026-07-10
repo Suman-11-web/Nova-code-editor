@@ -25,6 +25,12 @@ jobs:
     - name: Grant Execute Permission to Gradle Wrapper
       run: chmod +x gradlew
 
+    - name: Restore and Validate Gradle Wrapper JAR
+      run: |
+        mkdir -p gradle/wrapper
+        curl -sL https://raw.githubusercontent.com/gradle/gradle/release/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+        file gradle/wrapper/gradle-wrapper.jar
+
     - name: Assemble Debug APK
       run: ./gradlew assembleDebug
 
