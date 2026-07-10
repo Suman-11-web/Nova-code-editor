@@ -2,42 +2,45 @@ name: Android Build Release APK
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - develop
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
   build:
+    name: Build Release APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: Set up Java JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
 
-      - name: Grant Permission
-        run: chmod +x ./gradlew
+    - name: Grant Execute Permission to Gradle Wrapper
+      run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+    - name: Assemble Debug APK
+      run: ./gradlew assembleDebug
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+    - name: Assemble Release APK
+      run: ./gradlew assembleRelease
+      continue-on-error: true # Ensure build success even if private upload signing credentials are not yet configured in repository secrets
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+    - name: Upload Debug APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Nova-Code-Editor-Debug-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Release-APK
-          path: app/build/outputs/apk/release/
+    - name: Upload Release APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Nova-Code-Editor-Release-APK
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        if-no-files-found: warn

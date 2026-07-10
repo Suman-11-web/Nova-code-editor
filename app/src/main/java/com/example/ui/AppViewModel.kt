@@ -14,6 +14,8 @@ import com.example.data.RecentFile
 import com.example.ui.editor.EditorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
@@ -85,8 +87,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val database = NovaDatabase.getDatabase(application)
         repository = NovaRepository(database.novaDao())
         
-        recentFiles = repository.recentFiles as StateFlow<List<RecentFile>>
-        editorTabs = repository.editorTabs as StateFlow<List<EditorTab>>
+        recentFiles = repository.recentFiles.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+        editorTabs = repository.editorTabs.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
 
         // Ensure default Project directory exists
         if (!currentDirectory.exists()) {
