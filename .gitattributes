@@ -1,0 +1,4 @@
+# Force Git to treat Gradle Wrapper and keystore files as binary
+# to prevent any line-ending conversions (LF vs CRLF) which corrupts them.
+*.jar binary
+*.jks binary
