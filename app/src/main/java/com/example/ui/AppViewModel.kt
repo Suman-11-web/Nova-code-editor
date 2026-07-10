@@ -105,6 +105,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var consoleError by mutableStateOf("")
     var isConsoleRunning by mutableStateOf(false)
 
+    // Local Host Server and Storage States
+    private var httpServer: HttpServer? = null
+    var localServerPort by mutableStateOf(8080)
+    var isLocalServerRunning by mutableStateOf(false)
+    var useExternalStorage by mutableStateOf(false)
+    
+    // Web Preview States
+    var showWebPreview by mutableStateOf(false)
+    var webPreviewUrl by mutableStateOf("")
+
     init {
         val database = NovaDatabase.getDatabase(application)
         repository = NovaRepository(database.novaDao())
@@ -216,16 +226,6 @@ console.log(area);
     fun navigateTo(screen: Screen) {
         currentScreen = screen
     }
-
-    // Local Host Server and Storage States
-    private var httpServer: HttpServer? = null
-    var localServerPort by mutableStateOf(8080)
-    var isLocalServerRunning by mutableStateOf(false)
-    var useExternalStorage by mutableStateOf(false)
-    
-    // Web Preview States
-    var showWebPreview by mutableStateOf(false)
-    var webPreviewUrl by mutableStateOf("")
 
     fun startLocalServer() {
         if (isLocalServerRunning) return
