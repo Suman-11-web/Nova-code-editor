@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Left Bracket < with sleek modern design -->
+    <path
+        android:pathData="M30,34 L16,54 L30,74"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="16"
+                android:startY="54"
+                android:endX="30"
+                android:endY="34"
+                android:type="linear">
+                <item android:offset="0" android:color="#F43F5E" /> <!-- Coral Pink -->
+                <item android:offset="1" android:color="#EC4899" /> <!-- Deep Pink -->
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Right Bracket > with sleek modern design -->
+    <path
+        android:pathData="M78,34 L92,54 L78,74"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="78"
+                android:startY="34"
+                android:endX="92"
+                android:endY="54"
+                android:type="linear">
+                <item android:offset="0" android:color="#06B6D4" /> <!-- Neon Cyan -->
+                <item android:offset="1" android:color="#3B82F6" /> <!-- Electric Blue -->
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glowing, sleek Letter N in the center -->
+    <path
+        android:pathData="M38,72 L38,36 C38,36 43,36 44,36 L58,61 L58,36 C58,36 63,36 64,36 L64,72 C64,72 59,72 58,72 L44,47 L44,72 L38,72 Z"
+        android:fillType="nonZero">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="38"
+                android:startY="72"
+                android:endX="64"
+                android:endY="36"
+                android:type="linear">
+                <item android:offset="0" android:color="#A855F7" /> <!-- Purple -->
+                <item android:offset="0.5" android:color="#EC4899" /> <!-- Pink Accent -->
+                <item android:offset="1" android:color="#F43F5E" /> <!-- Bright Coral -->
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

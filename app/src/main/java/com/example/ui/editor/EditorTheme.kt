@@ -1,0 +1,110 @@
+package com.example.ui.editor
+
+import androidx.compose.ui.graphics.Color
+
+enum class EditorTheme(
+    val displayName: String,
+    val background: Color,
+    val textColor: Color,
+    val cursorColor: Color,
+    val commentColor: Color,
+    val stringColor: Color,
+    val keywordColor: Color,
+    val numberColor: Color,
+    val functionColor: Color,
+    val operatorColor: Color,
+    val lineNumbersBackground: Color,
+    val lineNumbersText: Color,
+    val isDark: Boolean
+) {
+    ELEGANT_DARK(
+        displayName = "Elegant Dark",
+        background = Color(0xFF1C1B1F),
+        textColor = Color(0xFFE6E1E5),
+        cursorColor = Color(0xFFD0BCFF),
+        commentColor = Color(0xFF938F99),
+        stringColor = Color(0xFFEFB8C8),
+        keywordColor = Color(0xFFD0BCFF),
+        numberColor = Color(0xFFEFB8C8),
+        functionColor = Color(0xFF7D5260),
+        operatorColor = Color(0xFFCCC2DC),
+        lineNumbersBackground = Color(0xFF1C1B1F),
+        lineNumbersText = Color(0xFF938F99),
+        isDark = true
+    ),
+    MONOKAI_PRO(
+        displayName = "Monokai Pro",
+        background = Color(0xFF2D2A2E),
+        textColor = Color(0xFFFCFCFA),
+        cursorColor = Color(0xFFFC9867),
+        commentColor = Color(0xFF727072),
+        stringColor = Color(0xFFA9DC76),
+        keywordColor = Color(0xFFFF61EF),
+        numberColor = Color(0xFFAB9DF2),
+        functionColor = Color(0xFF78DCE8),
+        operatorColor = Color(0xFFFFD866),
+        lineNumbersBackground = Color(0xFF222022),
+        lineNumbersText = Color(0xFF5B595B),
+        isDark = true
+    ),
+    ONE_DARK(
+        displayName = "One Dark Pro",
+        background = Color(0xFF282C34),
+        textColor = Color(0xFFABB2BF),
+        cursorColor = Color(0xFF528BFF),
+        commentColor = Color(0xFF5C6370),
+        stringColor = Color(0xFF98C379),
+        keywordColor = Color(0xFFC678DD),
+        numberColor = Color(0xFFD19A66),
+        functionColor = Color(0xFF61AFEF),
+        operatorColor = Color(0xFF56B6C2),
+        lineNumbersBackground = Color(0xFF21252B),
+        lineNumbersText = Color(0xFF4B5263),
+        isDark = true
+    ),
+    SOLARIZED_DARK(
+        displayName = "Solarized Dark",
+        background = Color(0xFF002B36),
+        textColor = Color(0xFF839496),
+        cursorColor = Color(0xFF268BD2),
+        commentColor = Color(0xFF586E75),
+        stringColor = Color(0xFF2AA198),
+        keywordColor = Color(0xFF859900),
+        numberColor = Color(0xFFD33682),
+        functionColor = Color(0xFF268BD2),
+        operatorColor = Color(0xFF93A1A1),
+        lineNumbersBackground = Color(0xFF073642),
+        lineNumbersText = Color(0xFF586E75),
+        isDark = true
+    ),
+    COSMIC_DARK(
+        displayName = "Cosmic Dark",
+        background = Color(0xFF0B0F19),
+        textColor = Color(0xFFE2E8F0),
+        cursorColor = Color(0xFFF43F5E),
+        commentColor = Color(0xFF64748B),
+        stringColor = Color(0xFF34D399),
+        keywordColor = Color(0xFFA78BFA),
+        numberColor = Color(0xFFFB7185),
+        functionColor = Color(0xFF38BDF8),
+        operatorColor = Color(0xFFFBBF24),
+        lineNumbersBackground = Color(0xFF030712),
+        lineNumbersText = Color(0xFF4B5563),
+        isDark = true
+    ),
+    GITHUB_LIGHT(
+        displayName = "GitHub Light",
+        background = Color(0xFFFFFFFF),
+        textColor = Color(0xFF24292E),
+        cursorColor = Color(0xFF032F62),
+        commentColor = Color(0xFF6A737D),
+        stringColor = Color(0xFF032F62),
+        keywordColor = Color(0xFFD73A49),
+        numberColor = Color(0xFF005CC5),
+        functionColor = Color(0xFF6F42C1),
+        operatorColor = Color(0xFFE36209),
+        lineNumbersBackground = Color(0xFFF6F8FA),
+        lineNumbersText = Color(0xFF959DA5),
+        isDark = false
+    )
+}

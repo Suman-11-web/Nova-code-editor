@@ -1,0 +1,6 @@
+{
+  "name": "Nova Code Editor",
+  "description": "A beginner-friendly, fast, and feature-rich Android code editor with syntax highlighting, file manager, and visual simulation console.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
