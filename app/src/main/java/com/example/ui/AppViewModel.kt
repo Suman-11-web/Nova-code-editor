@@ -18,7 +18,6 @@ import com.example.data.NovaDatabase
 import com.example.data.NovaRepository
 import com.example.data.RecentFile
 import com.example.ui.editor.EditorTheme
-import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -106,7 +105,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var isConsoleRunning by mutableStateOf(false)
 
     // Local Host Server and Storage States
-    private var httpServer: HttpServer? = null
+    private var serverSocket: java.net.ServerSocket? = null
+    @Volatile
+    private var isServerThreadRunning = false
     var localServerPort by mutableStateOf(8080)
     var isLocalServerRunning by mutableStateOf(false)
     var useExternalStorage by mutableStateOf(false)
@@ -230,62 +231,57 @@ console.log(area);
     fun startLocalServer() {
         if (isLocalServerRunning) return
         try {
-            val server = HttpServer.create(InetSocketAddress("127.0.0.1", 8080), 0)
-            server.createContext("/") { exchange ->
-                val path = exchange.requestURI.path
-                val file = File(currentDirectory, path.removePrefix("/"))
-                
-                if (file.exists() && file.isFile) {
-                    val bytes = file.readBytes()
-                    val mimeType = when (file.extension.lowercase()) {
-                        "html", "htm" -> "text/html"
-                        "css" -> "text/css"
-                        "js" -> "application/javascript"
-                        "json" -> "application/json"
-                        "png" -> "image/png"
-                        "jpg", "jpeg" -> "image/jpeg"
-                        "gif" -> "image/gif"
-                        "svg" -> "image/svg+xml"
-                        else -> "text/plain"
-                    }
-                    exchange.responseHeaders.set("Content-Type", mimeType)
-                    exchange.sendResponseHeaders(200, bytes.size.toLong())
-                    exchange.responseBody.use { os ->
-                        os.write(bytes)
-                    }
-                } else {
-                    val indexFile = File(file, "index.html")
-                    if (file.isDirectory && indexFile.exists()) {
-                        val bytes = indexFile.readBytes()
-                        exchange.responseHeaders.set("Content-Type", "text/html")
-                        exchange.sendResponseHeaders(200, bytes.size.toLong())
-                        exchange.responseBody.use { os ->
-                            os.write(bytes)
-                        }
-                    } else {
-                        val response = "404 Not Found: ${file.name}".toByteArray()
-                        exchange.sendResponseHeaders(404, response.size.toLong())
-                        exchange.responseBody.use { os ->
-                            os.write(response)
-                        }
+            val socket = try {
+                java.net.ServerSocket(8080, 50, java.net.InetAddress.getByName("127.0.0.1"))
+            } catch (e: Exception) {
+                java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
+            }
+            serverSocket = socket
+            localServerPort = socket.localPort
+            isLocalServerRunning = true
+            isServerThreadRunning = true
+            
+            kotlin.concurrent.thread(name = "NovaLocalServer") {
+                while (isServerThreadRunning) {
+                    try {
+                        val clientSocket = socket.accept()
+                        handleHttpClient(clientSocket)
+                    } catch (e: Exception) {
+                        // socket closed or error
                     }
                 }
             }
-            server.executor = java.util.concurrent.Executors.newSingleThreadExecutor()
-            server.start()
-            httpServer = server
-            isLocalServerRunning = true
-            localServerPort = 8080
         } catch (e: Exception) {
             e.printStackTrace()
-            // Try random free port
+        }
+    }
+
+    private fun handleHttpClient(clientSocket: java.net.Socket) {
+        kotlin.concurrent.thread {
             try {
-                val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-                server.createContext("/") { exchange ->
-                    val path = exchange.requestURI.path
-                    val file = File(currentDirectory, path.removePrefix("/"))
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(clientSocket.getInputStream()))
+                val requestLine = reader.readLine() ?: return@thread
+                val parts = requestLine.split(" ")
+                if (parts.size < 2) return@thread
+                val method = parts[0]
+                var path = parts[1].substringBefore("?").removePrefix("/")
+                if (path.isEmpty()) {
+                    path = "index.html"
+                }
+
+                if (method == "GET") {
+                    var file = File(currentDirectory, path)
+                    if (file.isDirectory) {
+                        file = File(file, "index.html")
+                    }
+
+                    val outputStream = clientSocket.getOutputStream()
                     if (file.exists() && file.isFile) {
-                        val bytes = file.readBytes()
+                        val bytes = try {
+                            file.readBytes()
+                        } catch (e: Exception) {
+                            ByteArray(0)
+                        }
                         val mimeType = when (file.extension.lowercase()) {
                             "html", "htm" -> "text/html"
                             "css" -> "text/css"
@@ -297,44 +293,43 @@ console.log(area);
                             "svg" -> "image/svg+xml"
                             else -> "text/plain"
                         }
-                        exchange.responseHeaders.set("Content-Type", mimeType)
-                        exchange.sendResponseHeaders(200, bytes.size.toLong())
-                        exchange.responseBody.use { os ->
-                            os.write(bytes)
-                        }
+
+                        outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                        outputStream.write("Content-Type: $mimeType\r\n".toByteArray())
+                        outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
+                        outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                        outputStream.write(bytes)
                     } else {
-                        val indexFile = File(file, "index.html")
-                        if (file.isDirectory && indexFile.exists()) {
-                            val bytes = indexFile.readBytes()
-                            exchange.responseHeaders.set("Content-Type", "text/html")
-                            exchange.sendResponseHeaders(200, bytes.size.toLong())
-                            exchange.responseBody.use { os ->
-                                os.write(bytes)
-                            }
-                        } else {
-                            val response = "404 Not Found".toByteArray()
-                            exchange.sendResponseHeaders(404, response.size.toLong())
-                            exchange.responseBody.use { os ->
-                                os.write(response)
-                            }
-                        }
+                        val response = "404 Not Found: ${file.name}".toByteArray()
+                        outputStream.write("HTTP/1.1 404 Not Found\r\n".toByteArray())
+                        outputStream.write("Content-Type: text/plain\r\n".toByteArray())
+                        outputStream.write("Content-Length: ${response.size}\r\n".toByteArray())
+                        outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                        outputStream.write(response)
                     }
+                    outputStream.flush()
                 }
-                server.executor = java.util.concurrent.Executors.newSingleThreadExecutor()
-                server.start()
-                httpServer = server
-                isLocalServerRunning = true
-                localServerPort = server.address.port
-            } catch (ex: Exception) {
-                ex.printStackTrace()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                try {
+                    clientSocket.close()
+                } catch (e: Exception) {
+                    // ignore
+                }
             }
         }
     }
 
     fun stopLocalServer() {
-        httpServer?.stop(0)
-        httpServer = null
+        isServerThreadRunning = false
         isLocalServerRunning = false
+        try {
+            serverSocket?.close()
+        } catch (e: Exception) {
+            // ignore
+        }
+        serverSocket = null
     }
 
     override fun onCleared() {
