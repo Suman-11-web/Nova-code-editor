@@ -102,7 +102,7 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
 
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(Color(0xFF070A13)) // High-fidelity dark terminal black

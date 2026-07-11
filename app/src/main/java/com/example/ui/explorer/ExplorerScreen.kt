@@ -107,7 +107,7 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
     ) { innerPadding ->
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {

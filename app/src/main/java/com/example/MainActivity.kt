@@ -28,6 +28,11 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -210,6 +215,54 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
         )
     }
 
+    // Keyboard Shortcuts Dialog
+    if (viewModel.showShortcutsDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.showShortcutsDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Keyboard,
+                        contentDescription = "Shortcuts Icon",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Keyboard Shortcuts")
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ShortcutRowItem("Ctrl + N", "Create empty Python file")
+                    ShortcutRowItem("Ctrl + S", "Save current open file")
+                    ShortcutRowItem("Ctrl + R", "Run and test active code")
+                    ShortcutRowItem("Ctrl + Z", "Undo last editor change")
+                    ShortcutRowItem("Ctrl + Y", "Redo reverted editor change")
+                    ShortcutRowItem("Ctrl + F", "Search and replace in file")
+                    ShortcutRowItem("Ctrl + H", "Navigate to Editor Screen")
+                    ShortcutRowItem("Ctrl + E", "Navigate to File Explorer")
+                    ShortcutRowItem("Ctrl + T", "Navigate to Terminal Console")
+                    ShortcutRowItem("Ctrl + ,", "Open Settings Screen")
+                    ShortcutRowItem("Ctrl + W", "Close active editor tab")
+                    ShortcutRowItem("Ctrl + P", "Run and Preview active web app")
+                    ShortcutRowItem("Ctrl + +", "Increase editor font size")
+                    ShortcutRowItem("Ctrl + -", "Decrease editor font size")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.showShortcutsDialog = false }
+                ) {
+                    Text("Dismiss")
+                }
+            }
+        )
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -242,6 +295,14 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
                         icon = { Icon(Icons.Default.Terminal, contentDescription = "Console") },
                         label = { Text("Console") },
                         modifier = Modifier.testTag("nav_console_tab")
+                    )
+                    // Navigation item: Shortcuts Button
+                    NavigationBarItem(
+                        selected = viewModel.showShortcutsDialog,
+                        onClick = { viewModel.showShortcutsDialog = true },
+                        icon = { Icon(Icons.Default.Keyboard, contentDescription = "Shortcuts") },
+                        label = { Text("Shortcuts") },
+                        modifier = Modifier.testTag("nav_shortcuts_tab")
                     )
                     // Navigation item: Settings
                     NavigationBarItem(
@@ -357,4 +418,33 @@ fun WebPreviewDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ShortcutRowItem(keys: String, action: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = keys,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = action,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

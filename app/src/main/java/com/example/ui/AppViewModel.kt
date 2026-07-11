@@ -117,6 +117,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Web Preview States
     var showWebPreview by mutableStateOf(false)
     var webPreviewUrl by mutableStateOf("")
+    
+    // Shortcuts Dialog State
+    var showShortcutsDialog by mutableStateOf(false)
 
     init {
         val database = NovaDatabase.getDatabase(application)
@@ -136,10 +139,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Ensure default Project directory exists
         if (!currentDirectory.exists()) {
             currentDirectory.mkdirs()
+        } else {
+            // Clean up sample starter files if they exist to keep workspace completely empty
+            try {
+                File(currentDirectory, "welcome.md").delete()
+                File(currentDirectory, "hello.py").delete()
+                File(currentDirectory, "script.js").delete()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
-
-        // Create some starter sample files if project directory is empty, to help beginners
-        createStarterSampleFiles()
         
         // Load file tree
         refreshFileTree()

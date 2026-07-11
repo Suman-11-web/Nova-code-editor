@@ -57,10 +57,17 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     var showSaveAsDialog by remember { mutableStateOf(false) }
     var saveAsName by remember { mutableStateOf("") }
 
+    var showHomeNewFileDialog by remember { mutableStateOf(false) }
+    var homeNewFileName by remember { mutableStateOf("") }
+
     Scaffold(
         modifier = modifier,
         topBar = {
-            Column(modifier = Modifier.background(theme.background)) {
+            Column(
+                modifier = Modifier
+                    .background(theme.background)
+                    .statusBarsPadding()
+            ) {
                 // Top control bar
                 Row(
                     modifier = Modifier
@@ -223,7 +230,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         
                         // New Draft Tab Button
                         IconButton(
-                            onClick = { viewModel.createNewDraftTab() },
+                            onClick = { showHomeNewFileDialog = true },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
@@ -241,7 +248,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 ExtendedFloatingActionButton(
                     text = { Text("New File") },
                     icon = { Icon(Icons.Default.Add, contentDescription = "New") },
-                    onClick = { viewModel.createNewDraftTab() },
+                    onClick = { showHomeNewFileDialog = true },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.testTag("new_draft_fab")
@@ -250,7 +257,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
     ) { innerPadding ->
         Column(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .background(theme.background)
                 .padding(innerPadding)
@@ -391,7 +398,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF25232A))
+                        .background(theme.lineNumbersBackground)
                         .padding(horizontal = 4.dp, vertical = 6.dp)
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -401,9 +408,13 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                     symbols.forEach { symbol ->
                         Box(
                             modifier = Modifier
-                                .widthIn(min = 44.dp)
-                                .height(40.dp)
-                                .background(Color(0xFF49454F).copy(alpha = 0.3f), shape = RoundedCornerShape(4.dp))
+                                  .widthIn(min = 44.dp)
+                                  .height(40.dp)
+                                  .background(
+                                      if (theme.isDark) Color(0xFF49454F).copy(alpha = 0.4f)
+                                      else Color(0xFFE0E0E0), 
+                                      shape = RoundedCornerShape(4.dp)
+                                  )
                                 .clickable {
                                     if (symbol == "TAB") {
                                         viewModel.insertTextAtCursor("    ")
@@ -509,6 +520,66 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
             },
             dismissButton = {
                 TextButton(onClick = { showSaveAsDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // New File Dialog on Home page (EditorScreen)
+    if (showHomeNewFileDialog) {
+        var fileError by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { 
+                showHomeNewFileDialog = false
+                homeNewFileName = ""
+            },
+            title = { Text("Create New File") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter a new file name with extension:")
+                    OutlinedTextField(
+                        value = homeNewFileName,
+                        onValueChange = { 
+                            homeNewFileName = it
+                            fileError = null
+                        },
+                        singleLine = true,
+                        isError = fileError != null,
+                        supportingText = {
+                            if (fileError != null) {
+                                Text(fileError!!, color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("Example: main.py, index.html, script.js", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("home_new_file_input")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (homeNewFileName.isBlank()) {
+                            fileError = "File name cannot be empty"
+                        } else if (!homeNewFileName.contains(".") || homeNewFileName.substringAfterLast(".").isEmpty()) {
+                            fileError = "Please specify a file extension (e.g., .py, .html, .js)"
+                        } else {
+                            viewModel.createNewFileInExplorer(homeNewFileName)
+                            homeNewFileName = ""
+                            showHomeNewFileDialog = false
+                        }
+                    },
+                    modifier = Modifier.testTag("home_new_file_confirm")
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    homeNewFileName = ""
+                    showHomeNewFileDialog = false 
+                }) {
                     Text("Cancel")
                 }
             }
