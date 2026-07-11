@@ -464,16 +464,28 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     // Save As Dialog
     if (showSaveAsDialog) {
+        var fileError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { showSaveAsDialog = false },
             title = { Text("Save As") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter a new file name:")
+                    Text("Enter a new file name with extension:")
                     OutlinedTextField(
                         value = saveAsName,
-                        onValueChange = { saveAsName = it },
+                        onValueChange = { 
+                            saveAsName = it
+                            fileError = null
+                        },
                         singleLine = true,
+                        isError = fileError != null,
+                        supportingText = {
+                            if (fileError != null) {
+                                Text(fileError!!, color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("Example: main.py, index.html", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth().testTag("save_as_input")
                     )
                 }
@@ -481,7 +493,11 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (saveAsName.isNotBlank()) {
+                        if (saveAsName.isBlank()) {
+                            fileError = "File name cannot be empty"
+                        } else if (!saveAsName.contains(".") || saveAsName.substringAfterLast(".").isEmpty()) {
+                            fileError = "Please specify a file extension (e.g., .py, .html, .js)"
+                        } else {
                             viewModel.saveCurrentFileAs(saveAsName)
                             showSaveAsDialog = false
                         }

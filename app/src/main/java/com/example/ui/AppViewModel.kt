@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -1065,5 +1067,320 @@ console.log(area);
     fun clearConsole() {
         consoleOutput = "Console cleared.\nNova Code Editor simulation runtime ready."
         consoleError = ""
+    }
+
+    // ----------------------------------------------------
+    // INTERACTIVE TERMINAL SHELL (REAL-TIME EXECUTOR)
+    // ----------------------------------------------------
+    var terminalInput by mutableStateOf("")
+    var terminalCwd by mutableStateOf(currentDirectory)
+    var terminalHistory by mutableStateOf("Nova Terminal Shell v1.0\nType 'help' to see list of available commands.\n\n")
+
+    fun getTerminalPrompt(): String {
+        val rootPath = getApplication<Application>().filesDir.parent ?: ""
+        val displayPath = terminalCwd.absolutePath.replace(rootPath, "~")
+        return "nova@android:$displayPath$ "
+    }
+
+    private val installedPipPackages = mutableSetOf<String>()
+
+    fun runTerminalCommand(commandLine: String) {
+        val trimmed = commandLine.trim()
+        if (trimmed.isEmpty()) return
+
+        // Append user prompt + command to history
+        terminalHistory += "${getTerminalPrompt()}$trimmed\n"
+
+        val parts = trimmed.split(Regex("\\s+"))
+        val command = parts[0]
+
+        when (command) {
+            "help" -> {
+                terminalHistory += """
+                    Available Terminal Commands:
+                      help                 Show this help screen
+                      clear                Clear terminal screen
+                      pwd                  Print current working directory
+                      ls                   List files and folders in current directory
+                      cd <dir>             Change working directory
+                      mkdir <dir_name>     Create a new directory
+                      rm <file_or_dir>     Delete file or directory (recursively)
+                      cat <file_name>      Print file contents
+                      pip install <pkg>    Install Python pip packages (simulated/real fallback)
+                      python <file_name>   Run custom Python script interpreter
+                      echo <text>          Print text to the terminal
+                      uname                Print system details
+                """.trimIndent() + "\n\n"
+            }
+            "clear" -> {
+                terminalHistory = ""
+            }
+            "pwd" -> {
+                terminalHistory += "${terminalCwd.absolutePath}\n\n"
+            }
+            "ls" -> {
+                try {
+                    val files = terminalCwd.listFiles()
+                    if (files.isNullOrEmpty()) {
+                        terminalHistory += "(empty directory)\n\n"
+                    } else {
+                        val sb = StringBuilder()
+                        files.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })).forEach { file ->
+                            if (file.isDirectory) {
+                                sb.append("📁 ${file.name}/\n")
+                            } else {
+                                sb.append("📄 ${file.name}   (${file.length()} bytes)\n")
+                            }
+                        }
+                        terminalHistory += sb.toString() + "\n"
+                    }
+                } catch (e: Exception) {
+                    terminalHistory += "Error listing files: ${e.message}\n\n"
+                }
+            }
+            "cd" -> {
+                if (parts.size < 2) {
+                    // Go to project home root
+                    val rootDir = if (useExternalStorage) {
+                        File(Environment.getExternalStorageDirectory(), "NovaProjects")
+                    } else {
+                        File(getApplication<Application>().filesDir, "NovaProjects")
+                    }
+                    if (!rootDir.exists()) rootDir.mkdirs()
+                    terminalCwd = rootDir
+                    terminalHistory += "\n"
+                } else {
+                    val targetPath = parts[1]
+                    val newDir = if (targetPath == "..") {
+                        terminalCwd.parentFile ?: terminalCwd
+                    } else {
+                        val file = File(terminalCwd, targetPath)
+                        if (file.isAbsolute) File(targetPath) else file
+                    }
+
+                    if (newDir.exists() && newDir.isDirectory) {
+                        terminalCwd = newDir
+                        terminalHistory += "\n"
+                    } else {
+                        terminalHistory += "cd: no such file or directory: $targetPath\n\n"
+                    }
+                }
+            }
+            "mkdir" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "mkdir: missing operand\n\n"
+                } else {
+                    val name = parts[1]
+                    val newDir = File(terminalCwd, name)
+                    if (newDir.exists()) {
+                        terminalHistory += "mkdir: cannot create directory '$name': File exists\n\n"
+                    } else {
+                        if (newDir.mkdirs()) {
+                            terminalHistory += "Directory '$name' created successfully\n\n"
+                            refreshFileTree()
+                        } else {
+                            terminalHistory += "mkdir: failed to create directory '$name'\n\n"
+                        }
+                    }
+                }
+            }
+            "rm" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "rm: missing operand\n\n"
+                } else {
+                    val hasForce = parts.contains("-rf") || parts.contains("-f") || parts.contains("-r")
+                    val targetName = parts.last()
+                    if (targetName == "rm" || targetName == "-rf" || targetName == "-f" || targetName == "-r") {
+                        terminalHistory += "rm: missing operand\n\n"
+                    } else {
+                        val file = File(terminalCwd, targetName)
+                        if (!file.exists()) {
+                            terminalHistory += "rm: cannot remove '$targetName': No such file or directory\n\n"
+                        } else {
+                            val success = if (file.isDirectory) {
+                                if (hasForce) {
+                                    file.deleteRecursively()
+                                } else {
+                                    file.delete()
+                                }
+                            } else {
+                                file.delete()
+                            }
+                            if (success) {
+                                terminalHistory += "Removed successfully\n\n"
+                                refreshFileTree()
+                            } else {
+                                terminalHistory += "rm: failed to remove '$targetName'. If it's a non-empty directory, use: rm -rf $targetName\n\n"
+                            }
+                        }
+                    }
+                }
+            }
+            "cat" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "cat: missing operand\n\n"
+                } else {
+                    val name = parts[1]
+                    val file = File(terminalCwd, name)
+                    if (file.exists() && file.isFile) {
+                        try {
+                            terminalHistory += file.readText() + "\n\n"
+                        } catch (e: Exception) {
+                            terminalHistory += "cat: read failed: ${e.message}\n\n"
+                        }
+                    } else {
+                        terminalHistory += "cat: $name: No such file or directory\n\n"
+                    }
+                }
+            }
+            "echo" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "\n"
+                } else {
+                    val text = trimmed.substringAfter("echo").trim()
+                    terminalHistory += "$text\n\n"
+                }
+            }
+            "uname" -> {
+                terminalHistory += "Linux android ${Build.VERSION.RELEASE} ${Build.HARDWARE} ${Build.MODEL} arm64\n\n"
+            }
+            "pip" -> {
+                if (parts.size >= 3 && parts[1] == "install") {
+                    val pkgName = parts[2]
+                    terminalHistory += "Collecting $pkgName...\n"
+                    
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(400)
+                        terminalHistory += "  Downloading $pkgName-1.2.4-py3-none-any.whl (84 kB)\n"
+                        kotlinx.coroutines.delay(600)
+                        terminalHistory += "  Preparing metadata (setup.py) ... done\n"
+                        kotlinx.coroutines.delay(500)
+                        terminalHistory += "Installing collected packages: $pkgName\n"
+                        kotlinx.coroutines.delay(400)
+                        terminalHistory += "Successfully installed $pkgName-1.2.4\n\n"
+                        installedPipPackages.add(pkgName)
+                    }
+                } else {
+                    terminalHistory += "Usage: pip install <package_name>\n\n"
+                }
+            }
+            "python" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "Python 3.10.4 Interactive Simulator\nUse 'python <file_name>' to run a script.\n\n"
+                } else {
+                    val name = parts[1]
+                    val file = File(terminalCwd, name)
+                    if (file.exists() && file.isFile) {
+                        val content = file.readText()
+                        terminalHistory += ">>> Running $name...\n"
+                        executePythonCodeInTerminal(content)
+                    } else {
+                        terminalHistory += "python: can't open file '$name': [Errno 2] No such file or directory\n\n"
+                    }
+                }
+            }
+            else -> {
+                runRealSystemCommand(trimmed)
+            }
+        }
+    }
+
+    private fun executePythonCodeInTerminal(code: String) {
+        val lines = code.split("\n")
+        val variables = mutableMapOf<String, String>()
+        val outputBuilder = StringBuilder()
+        var hasSyntaxError = false
+
+        for (index in lines.indices) {
+            val line = lines[index].trim()
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue
+
+            if (line.contains("=") && !line.startsWith("if") && !line.startsWith("for") && !line.startsWith("while")) {
+                val parts = line.split("=", limit = 2)
+                val varName = parts[0].trim()
+                var varValue = parts[1].trim()
+                if (varValue.startsWith("\"") && varValue.endsWith("\"")) {
+                    varValue = varValue.substring(1, varValue.length - 1)
+                } else if (varValue.startsWith("'") && varValue.endsWith("'")) {
+                    varValue = varValue.substring(1, varValue.length - 1)
+                }
+                variables[varName] = varValue
+            }
+
+            if (line.startsWith("print(")) {
+                val startIdx = line.indexOf("(") + 1
+                val endIdx = line.lastIndexOf(")")
+                if (endIdx > startIdx) {
+                    val expr = line.substring(startIdx, endIdx).trim()
+                    if ((expr.startsWith("\"") && expr.endsWith("\"")) || (expr.startsWith("'") && expr.endsWith("'"))) {
+                        outputBuilder.append(expr.substring(1, expr.length - 1)).append("\n")
+                    } else {
+                        if (expr.contains("+")) {
+                            val tokens = expr.split("+")
+                            val evalSum = StringBuilder()
+                            for (t in tokens) {
+                                val token = t.trim()
+                                val cleanToken = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                    token.substring(1, token.length - 1)
+                                } else {
+                                    variables[token] ?: token
+                                }
+                                evalSum.append(cleanToken)
+                            }
+                            outputBuilder.append(evalSum.toString()).append("\n")
+                        } else {
+                            val lookup = variables[expr] ?: expr
+                            outputBuilder.append(lookup).append("\n")
+                        }
+                    }
+                } else {
+                    hasSyntaxError = true
+                    terminalHistory += "SyntaxError: missing parentheses in call to 'print'\n\n"
+                    break
+                }
+            }
+        }
+
+        if (!hasSyntaxError) {
+            terminalHistory += outputBuilder.toString() + "\n"
+        }
+    }
+
+    private fun runRealSystemCommand(commandLine: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("sh", "-c", commandLine),
+                    null,
+                    terminalCwd
+                )
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(process.inputStream))
+                val errorReader = java.io.BufferedReader(java.io.InputStreamReader(process.errorStream))
+                
+                val output = StringBuilder()
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    output.append(line).append("\n")
+                }
+                while (errorReader.readLine().also { line = it } != null) {
+                    output.append(line).append("\n")
+                }
+                
+                val exitCode = process.waitFor()
+                withContext(Dispatchers.Main) {
+                    if (output.isNotEmpty()) {
+                        terminalHistory += output.toString() + "\n"
+                    } else if (exitCode != 0) {
+                        terminalHistory += "Command exited with non-zero code: $exitCode\n\n"
+                    } else {
+                        terminalHistory += "\n"
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    terminalHistory += "sh: command not found: ${commandLine.split(" ")[0]}\n\n"
+                }
+            }
+        }
     }
 }

@@ -230,6 +230,14 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         ShortcutRow("Ctrl + Z", "Undo last editor change")
                         ShortcutRow("Ctrl + Y", "Redo reverted editor change")
                         ShortcutRow("Ctrl + F", "Search and replace in file")
+                        ShortcutRow("Ctrl + H", "Navigate to Editor Screen")
+                        ShortcutRow("Ctrl + E", "Navigate to File Explorer")
+                        ShortcutRow("Ctrl + T", "Navigate to Terminal Console")
+                        ShortcutRow("Ctrl + ,", "Open Settings Screen")
+                        ShortcutRow("Ctrl + W", "Close active editor tab")
+                        ShortcutRow("Ctrl + P", "Run and Preview active web app")
+                        ShortcutRow("Ctrl + +", "Increase editor font size")
+                        ShortcutRow("Ctrl + -", "Decrease editor font size")
                     }
                 }
             }

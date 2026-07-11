@@ -401,17 +401,29 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     // New File Dialog
     if (showNewFileDialog) {
+        var fileError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { showNewFileDialog = false },
             title = { Text("Create New File") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("File Name (e.g. hello.py, index.html):")
+                    Text("File Name with Extension:")
                     OutlinedTextField(
                         value = newFileName,
-                        onValueChange = { newFileName = it },
+                        onValueChange = { 
+                            newFileName = it
+                            fileError = null
+                        },
                         singleLine = true,
-                        placeholder = { Text("untitled.py") },
+                        placeholder = { Text("index.html") },
+                        isError = fileError != null,
+                        supportingText = {
+                            if (fileError != null) {
+                                Text(fileError!!, color = MaterialTheme.colorScheme.error)
+                            } else {
+                                Text("Example: script.py, styles.css", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth().testTag("new_file_input")
                     )
                 }
@@ -419,7 +431,11 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (newFileName.isNotBlank()) {
+                        if (newFileName.isBlank()) {
+                            fileError = "File name cannot be empty"
+                        } else if (!newFileName.contains(".") || newFileName.substringAfterLast(".").isEmpty()) {
+                            fileError = "Please specify a file extension (e.g., .py, .html, .js)"
+                        } else {
                             viewModel.createNewFileInExplorer(newFileName)
                             newFileName = ""
                             showNewFileDialog = false

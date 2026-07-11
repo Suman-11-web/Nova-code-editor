@@ -94,6 +94,38 @@ class MainActivity : ComponentActivity() {
                     viewModel.isSearchActive = !viewModel.isSearchActive
                     return true
                 }
+                KeyEvent.KEYCODE_H -> {
+                    viewModel.navigateTo(Screen.EDITOR)
+                    return true
+                }
+                KeyEvent.KEYCODE_E -> {
+                    viewModel.navigateTo(Screen.EXPLORER)
+                    return true
+                }
+                KeyEvent.KEYCODE_T -> {
+                    viewModel.navigateTo(Screen.CONSOLE)
+                    return true
+                }
+                KeyEvent.KEYCODE_COMMA -> {
+                    viewModel.navigateTo(Screen.SETTINGS)
+                    return true
+                }
+                KeyEvent.KEYCODE_W -> {
+                    viewModel.activeTab?.let { viewModel.closeTab(it) }
+                    return true
+                }
+                KeyEvent.KEYCODE_P -> {
+                    viewModel.runActiveCode()
+                    return true
+                }
+                KeyEvent.KEYCODE_EQUALS -> {
+                    viewModel.fontSize = (viewModel.fontSize + 2f).coerceAtMost(26f)
+                    return true
+                }
+                KeyEvent.KEYCODE_MINUS -> {
+                    viewModel.fontSize = (viewModel.fontSize - 2f).coerceAtLeast(10f)
+                    return true
+                }
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -121,15 +153,18 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
     var showPermissionRequestDialog by remember { mutableStateOf(false) }
 
     // Check storage permissions reactively
-    LaunchedEffect(currentScreen) {
-        if (currentScreen == Screen.EXPLORER && viewModel.useExternalStorage && !viewModel.hasStoragePermission(context)) {
+    LaunchedEffect(currentScreen, viewModel.useExternalStorage) {
+        if (viewModel.useExternalStorage && !viewModel.hasStoragePermission(context)) {
             showPermissionRequestDialog = true
         }
     }
 
     if (showPermissionRequestDialog) {
         AlertDialog(
-            onDismissRequest = { showPermissionRequestDialog = false },
+            onDismissRequest = { 
+                showPermissionRequestDialog = false 
+                viewModel.setStorageSource(false, context)
+            },
             title = { Text("Storage Permission Required") },
             text = { 
                 Text("To load and save your workspace files and folders in your device system storage, Nova Code Editor requires Storage Permissions.") 
@@ -157,7 +192,10 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPermissionRequestDialog = false }) {
+                TextButton(onClick = { 
+                    showPermissionRequestDialog = false 
+                    viewModel.setStorageSource(false, context)
+                }) {
                     Text("Cancel")
                 }
             }
@@ -217,10 +255,8 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
             }
         }
     ) { innerPadding ->
-        // Use statusBarsPadding to avoid overlapping network/battery/clock icons
         val screenModifier = Modifier
             .padding(innerPadding)
-            .statusBarsPadding()
             
         when (currentScreen) {
             Screen.EDITOR -> EditorScreen(viewModel = viewModel, modifier = screenModifier)
