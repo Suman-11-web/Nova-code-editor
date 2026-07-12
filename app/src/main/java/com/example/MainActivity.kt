@@ -42,6 +42,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.example.ui.AppViewModel
 import com.example.ui.Screen
 import com.example.ui.console.ConsoleScreen
@@ -153,6 +156,22 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
             }
         }
     )
+
+    // Automatically check and activate storage when app resumes
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (viewModel.useExternalStorage && viewModel.hasStoragePermission(context)) {
+                    viewModel.setStorageSource(true, context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Permission Rationale dialog
     var showPermissionRequestDialog by remember { mutableStateOf(false) }

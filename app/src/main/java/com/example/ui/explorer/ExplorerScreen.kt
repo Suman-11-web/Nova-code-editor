@@ -205,14 +205,16 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                     items(recentFiles) { recent ->
                         val file = File(recent.filePath)
                         if (file.exists()) {
+                            val (icon, tint) = com.example.ui.components.LanguageIconHelper.getIconAndColor(recent.fileName, false)
                             ListItem(
                                 headlineContent = { Text(recent.fileName, fontFamily = FontFamily.Monospace, fontSize = 14.sp) },
                                 supportingContent = { Text(recent.filePath, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp) },
                                 leadingContent = {
                                     Icon(
-                                        Icons.Default.History,
+                                        icon,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        tint = tint,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 },
                                 modifier = Modifier
@@ -264,25 +266,8 @@ fun ExplorerScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 } else {
                     items(fileList) { file ->
                         val isDir = file.isDirectory
+                        val (icon, tint) = com.example.ui.components.LanguageIconHelper.getIconAndColor(file.name, isDir)
                         val fileExt = file.extension.lowercase()
-                        
-                        val icon = when {
-                            isDir -> Icons.Default.Folder
-                            fileExt == "py" -> Icons.Default.IntegrationInstructions
-                            fileExt == "js" -> Icons.Default.Javascript
-                            fileExt == "json" -> Icons.Default.SettingsApplications
-                            fileExt == "md" -> Icons.Default.Description
-                            else -> Icons.Default.InsertDriveFile
-                        }
-
-                        val tint = when {
-                            isDir -> Color(0xFFFBBF24) // Gold Folder
-                            fileExt == "py" -> Color(0xFF38BDF8) // Python Cyan Blue
-                            fileExt == "js" -> Color(0xFFEAB308) // JS Yellow
-                            fileExt == "json" -> Color(0xFFA855F7) // JSON Purple
-                            fileExt == "md" -> Color(0xFF34D399) // Markdown Green
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
 
                         ListItem(
                             headlineContent = {

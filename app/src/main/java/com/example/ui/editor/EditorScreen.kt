@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
@@ -36,6 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AppViewModel
 import com.example.ui.Screen
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class SyntaxHighlightingTransformation(
     private val language: String,
@@ -61,6 +66,12 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
     var showHomeNewFileDialog by remember { mutableStateOf(false) }
     var homeNewFileName by remember { mutableStateOf("") }
 
+    // Premium upgrade popup/dialog states
+    var showThemeSelectorDialog by remember { mutableStateOf(false) }
+    var showVersionHistoryDialog by remember { mutableStateOf(false) }
+    var selectedSnapshotForDiff by remember { mutableStateOf<com.example.data.VersionSnapshot?>(null) }
+    var showQuickActionDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -78,7 +89,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -104,23 +115,30 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             Text(
                                 text = "Nova Code Editor",
                                 style = TextStyle(
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = theme.textColor
                                 )
                             )
                             Text(
-                                text = "v1.2.0",
+                                text = "Pro Edition",
                                 style = TextStyle(
-                                    fontSize = 10.sp,
-                                    color = Color(0xFFD0BCFF).copy(alpha = 0.8f),
-                                    fontWeight = FontWeight.Medium
+                                    fontSize = 9.sp,
+                                    color = Color(0xFF4ADE80),
+                                    fontWeight = FontWeight.Bold
                                 )
                             )
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Toolbar buttons with horizontal scroll so all premium tools fit beautifully
+                    Row(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         // Undo
                         IconButton(
                             onClick = { viewModel.undo() },
@@ -143,6 +161,57 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
                         ) {
                             Icon(imageVector = Icons.Default.Search, contentDescription = "Search & Replace")
+                        }
+                        // Multi-Theme Selector (Premium)
+                        IconButton(
+                            onClick = { showThemeSelectorDialog = true },
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                        ) {
+                            Icon(imageVector = Icons.Default.Palette, contentDescription = "Editor Themes", tint = Color(0xFFFFB86C))
+                        }
+                        // Split-Screen Editor Toggler (Premium)
+                        IconButton(
+                            onClick = {
+                                if (activeTab != null) {
+                                    if (viewModel.isSplitScreenEnabled) {
+                                        viewModel.isSplitScreenEnabled = false
+                                    } else {
+                                        viewModel.isSplitScreenEnabled = true
+                                        viewModel.activeLeftTabId = activeTab.id
+                                        viewModel.activeRightTabId = openTabs.find { it.id != activeTab.id }?.id ?: activeTab.id
+                                        viewModel.selectedPane = 0
+                                    }
+                                }
+                            },
+                            enabled = activeTab != null,
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Splitscreen,
+                                contentDescription = "Split Screen",
+                                tint = if (viewModel.isSplitScreenEnabled) Color(0xFF50FA7B) else theme.textColor
+                            )
+                        }
+                        // Local Git-Style Version snapshots (Premium)
+                        IconButton(
+                            onClick = {
+                                if (activeTab != null) {
+                                    viewModel.loadVersionHistoryForActiveFile()
+                                    selectedSnapshotForDiff = null
+                                    showVersionHistoryDialog = true
+                                }
+                            },
+                            enabled = activeTab != null,
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                        ) {
+                            Icon(imageVector = Icons.Default.History, contentDescription = "Version History", tint = Color(0xFFBD93F9))
+                        }
+                        // Quick Action Developer Shortcut (Premium)
+                        IconButton(
+                            onClick = { showQuickActionDialog = true },
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                        ) {
+                            Icon(imageVector = Icons.Default.FlashOn, contentDescription = "Developer Shortcuts", tint = Color(0xFFF1FA8C))
                         }
                         // Save
                         IconButton(
@@ -182,7 +251,9 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            modifier = Modifier.height(36.dp).testTag("run_code_button")
+                            modifier = Modifier
+                                .height(36.dp)
+                                .testTag("run_code_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
@@ -190,7 +261,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Run", fontSize = 14.sp)
+                            Text("Run", fontSize = 13.sp)
                         }
                     }
                 }
@@ -203,7 +274,8 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             .background(theme.lineNumbersBackground)
                             .horizontalScroll(rememberScrollState())
                             .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.Start
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         openTabs.forEach { tab ->
                             val isActive = activeTab?.id == tab.id
@@ -214,32 +286,52 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 modifier = Modifier
                                     .padding(horizontal = 4.dp)
                                     .background(tabBg, shape = MaterialTheme.shapes.small)
-                                    .clickable { viewModel.selectTab(tab) }
+                                    .clickable {
+                                        if (viewModel.isSplitScreenEnabled) {
+                                            if (viewModel.selectedPane == 0) {
+                                                viewModel.activeLeftTabId = tab.id
+                                            } else {
+                                                viewModel.activeRightTabId = tab.id
+                                            }
+                                        }
+                                        viewModel.selectTab(tab)
+                                    }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = tab.fileName + (if (tab.isUnsaved) " *" else ""),
-                                    fontSize = 13.sp,
-                                    color = tabTextCol,
-                                    fontFamily = FontFamily.Monospace
+                                    style = TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 12.sp,
+                                        color = tabTextCol,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 )
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close Tab",
-                                    tint = tabTextCol.copy(alpha = 0.6f),
+                                Box(
                                     modifier = Modifier
-                                        .size(14.dp)
-                                        .clickable { viewModel.closeTab(tab) }
-                                )
+                                        .size(16.dp)
+                                        .background(Color.Transparent, shape = CircleShape)
+                                        .clickable { viewModel.closeTab(tab) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Close Tab",
+                                        tint = tabTextCol.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
                             }
                         }
-                        
-                        // New Draft Tab Button
+
+                        // Add Draft Button
                         IconButton(
-                            onClick = { showHomeNewFileDialog = true },
-                            modifier = Modifier.size(32.dp)
+                            onClick = { viewModel.createNewDraftTab() },
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp)
+                                .size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -318,7 +410,6 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         ) {
                             TextButton(
                                 onClick = {
-                                    // Search & Replace logic
                                     val tab = activeTab
                                     if (tab != null && viewModel.searchText.isNotEmpty()) {
                                         val replaced = tab.content.replace(viewModel.searchText, viewModel.replaceText)
@@ -341,79 +432,201 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
             }
 
             if (activeTab != null) {
-                // Main code editing area
-                val codeText = activeTab.content
-                
-                Row(modifier = Modifier.weight(1f)) {
-                    val scrollState = rememberScrollState()
-                    val lineCount = codeText.split("\n").size
-
-                    // Line numbers column
-                    if (viewModel.showLineNumbers) {
-                        Column(
+                if (viewModel.isSplitScreenEnabled) {
+                    // Split screen workspace
+                    Column(modifier = Modifier.weight(1f)) {
+                        // Split-Screen Toolbar controls
+                        Row(
                             modifier = Modifier
-                                .width(42.dp)
-                                .fillMaxHeight()
+                                .fillMaxWidth()
                                 .background(theme.lineNumbersBackground)
-                                .verticalScroll(scrollState)
-                                .padding(top = 12.dp, bottom = 12.dp),
-                            horizontalAlignment = Alignment.End
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            for (i in 1..lineCount) {
-                                Text(
-                                    text = "$i ",
-                                    style = TextStyle(
-                                        fontFamily = viewModel.getEditorFontFamily(),
-                                        fontSize = viewModel.fontSize.sp,
-                                        color = theme.lineNumbersText
-                                    ),
-                                    modifier = Modifier.padding(end = 4.dp)
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Splitscreen, contentDescription = null, tint = Color(0xFF50FA7B), modifier = Modifier.size(16.dp))
+                                Text("Split-Screen Workspace", fontSize = 12.sp, color = theme.textColor, fontWeight = FontWeight.Bold)
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Toggle split layout vertical / horizontal
+                                TextButton(
+                                    onClick = { viewModel.isVerticalSplit = !viewModel.isVerticalSplit },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(
+                                        imageVector = if (viewModel.isVerticalSplit) Icons.Default.ViewWeek else Icons.Default.ViewStream,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (viewModel.isVerticalSplit) "Vertical" else "Horizontal", fontSize = 11.sp)
+                                }
+
+                                // Close Split View
+                                TextButton(
+                                    onClick = { viewModel.isSplitScreenEnabled = false },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Close Split", fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        if (viewModel.isVerticalSplit) {
+                            Row(modifier = Modifier.weight(1f)) {
+                                viewModel.activeLeftTabId?.let { leftId ->
+                                    EditorPane(
+                                        tabId = leftId,
+                                        viewModel = viewModel,
+                                        theme = theme,
+                                        isActive = viewModel.selectedPane == 0,
+                                        onTap = {
+                                            viewModel.selectedPane = 0
+                                            viewModel.activeLeftTabId?.let { id ->
+                                                viewModel.openTabs.find { it.id == id }?.let { t -> viewModel.selectTab(t) }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(Color.Gray.copy(alpha = 0.5f)))
+                                viewModel.activeRightTabId?.let { rightId ->
+                                    EditorPane(
+                                        tabId = rightId,
+                                        viewModel = viewModel,
+                                        theme = theme,
+                                        isActive = viewModel.selectedPane == 1,
+                                        onTap = {
+                                            viewModel.selectedPane = 1
+                                            viewModel.activeRightTabId?.let { id ->
+                                                viewModel.openTabs.find { it.id == id }?.let { t -> viewModel.selectTab(t) }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(modifier = Modifier.weight(1f)) {
+                                viewModel.activeLeftTabId?.let { leftId ->
+                                    EditorPane(
+                                        tabId = leftId,
+                                        viewModel = viewModel,
+                                        theme = theme,
+                                        isActive = viewModel.selectedPane == 0,
+                                        onTap = {
+                                            viewModel.selectedPane = 0
+                                            viewModel.activeLeftTabId?.let { id ->
+                                                viewModel.openTabs.find { it.id == id }?.let { t -> viewModel.selectTab(t) }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                Box(modifier = Modifier.height(1.dp).fillMaxWidth().background(Color.Gray.copy(alpha = 0.5f)))
+                                viewModel.activeRightTabId?.let { rightId ->
+                                    EditorPane(
+                                        tabId = rightId,
+                                        viewModel = viewModel,
+                                        theme = theme,
+                                        isActive = viewModel.selectedPane == 1,
+                                        onTap = {
+                                            viewModel.selectedPane = 1
+                                            viewModel.activeRightTabId?.let { id ->
+                                                viewModel.openTabs.find { it.id == id }?.let { t -> viewModel.selectTab(t) }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
+                } else {
+                    // Standard Single Editor Mode
+                    val codeText = activeTab.content
+                    Row(modifier = Modifier.weight(1f)) {
+                        val scrollState = rememberScrollState()
+                        val lineCount = codeText.split("\n").size
 
-                    // Main typing text area
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(theme.background)
-                            .verticalScroll(scrollState)
-                            .padding(12.dp)
-                    ) {
-                        BasicTextField(
-                            value = viewModel.editorTextFieldValue,
-                            onValueChange = { viewModel.updateEditorTextFieldValue(it) },
-                            textStyle = TextStyle(
-                                fontFamily = viewModel.getEditorFontFamily(),
-                                fontSize = viewModel.fontSize.sp,
-                                color = theme.textColor,
-                                lineHeight = (viewModel.fontSize * 1.3).sp
-                            ),
-                            cursorBrush = SolidColor(theme.cursorColor),
-                            visualTransformation = SyntaxHighlightingTransformation(activeTab.language, theme),
+                        // Line numbers column
+                        if (viewModel.showLineNumbers) {
+                            Column(
+                                modifier = Modifier
+                                    .width(42.dp)
+                                    .fillMaxHeight()
+                                    .background(theme.lineNumbersBackground)
+                                    .verticalScroll(scrollState)
+                                    .padding(top = 12.dp, bottom = 12.dp),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                for (i in 1..lineCount) {
+                                    Text(
+                                        text = "$i ",
+                                        style = TextStyle(
+                                            fontFamily = viewModel.getEditorFontFamily(),
+                                            fontSize = viewModel.fontSize.sp,
+                                            color = theme.lineNumbersText
+                                        ),
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Main typing text area
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("code_editor_field"),
-                            keyboardOptions = KeyboardOptions(
-                                autoCorrectEnabled = false,
-                                imeAction = ImeAction.None
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .background(theme.background)
+                                .verticalScroll(scrollState)
+                                .padding(12.dp)
+                        ) {
+                            BasicTextField(
+                                value = viewModel.editorTextFieldValue,
+                                onValueChange = { viewModel.updateEditorTextFieldValue(it) },
+                                textStyle = TextStyle(
+                                    fontFamily = viewModel.getEditorFontFamily(),
+                                    fontSize = viewModel.fontSize.sp,
+                                    color = theme.textColor,
+                                    lineHeight = (viewModel.fontSize * 1.3).sp
+                                ),
+                                cursorBrush = SolidColor(theme.cursorColor),
+                                visualTransformation = SyntaxHighlightingTransformation(activeTab.language, theme),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("code_editor_field"),
+                                keyboardOptions = KeyboardOptions(
+                                    autoCorrectEnabled = false,
+                                    imeAction = ImeAction.None
+                                )
                             )
-                        )
+                        }
                     }
                 }
 
-                // Code Auto-Suggestions Row
+                // Code Auto-Suggestions Row (Sits above the quick action keys)
                 val suggestions = viewModel.getSuggestionsForCurrentWord()
                 if (viewModel.enableAutoComplete && suggestions.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (theme.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                            .background(if (theme.isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .border(width = 1.dp, color = if (theme.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                             .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -421,7 +634,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             style = TextStyle(
                                 fontFamily = viewModel.getEditorFontFamily(),
                                 fontSize = 11.sp,
-                                color = if (theme.isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                color = if (theme.isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
                                 fontWeight = FontWeight.Bold
                             ),
                             modifier = Modifier.padding(end = 4.dp)
@@ -430,18 +643,18 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             Box(
                                 modifier = Modifier
                                     .background(
-                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.15f) else Color(0xFF0284C7).copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(16.dp)
+                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.12f) else Color(0xFF0284C7).copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
                                     .border(
                                         width = 1.dp,
-                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.4f) else Color(0xFF0284C7).copy(alpha = 0.3f),
-                                        shape = RoundedCornerShape(16.dp)
+                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.45f) else Color(0xFF0284C7).copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
                                     .clickable {
                                         viewModel.selectSuggestion(suggestion)
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = suggestion,
@@ -457,32 +670,79 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                     }
                 }
 
-                // Auxiliary coding symbols row
+                // Premium Coding Symbols Row with responsive scrolling and interactive standard snippets
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(theme.lineNumbersBackground)
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                        .background(if (theme.isDark) Color(0xFF1E1B4B) else Color(0xFFEEF2F6))
+                        .border(width = 1.dp, color = if (theme.isDark) Color(0xFF312E81) else Color(0xFFCBD5E1))
+                        .padding(horizontal = 6.dp, vertical = 8.dp)
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val symbols = listOf("{", "}", "(", ")", "[", "]", ";", "TAB")
+                    val symbols = listOf(
+                        "TAB", "()", "{}", "if-else", "for-loop", "print()", "class", "def",
+                        "←", "→", "-", "_", "@", "#", "*", "\"", "'", ":", ";", "!", "?", "/", "&"
+                    )
                     symbols.forEach { symbol ->
+                        val isSnippet = symbol in listOf("if-else", "for-loop", "print()", "class", "def")
+                        val containerBg = if (isSnippet) {
+                            if (theme.isDark) Color(0xFF312E81) else Color(0xFFD0BCFF)
+                        } else {
+                            if (theme.isDark) Color(0xFF312E81).copy(alpha = 0.6f) else Color(0xFFE2E8F0)
+                        }
+                        val textCol = if (isSnippet) {
+                            if (theme.isDark) Color(0xFF50FA7B) else Color(0xFF381E72)
+                        } else {
+                            theme.textColor
+                        }
+
                         Box(
                             modifier = Modifier
-                                  .widthIn(min = 44.dp)
-                                  .height(40.dp)
-                                  .background(
-                                      if (theme.isDark) Color(0xFF49454F).copy(alpha = 0.4f)
-                                      else Color(0xFFE0E0E0), 
-                                      shape = RoundedCornerShape(4.dp)
-                                  )
+                                .widthIn(min = 46.dp)
+                                .height(42.dp)
+                                .background(color = containerBg, shape = RoundedCornerShape(8.dp))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (theme.isDark) Color(0xFF4F46E5).copy(alpha = 0.5f) else Color(0xFF94A3B8),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
                                 .clickable {
-                                    if (symbol == "TAB") {
-                                        viewModel.insertTextAtCursor("    ")
-                                    } else {
-                                        viewModel.insertTextAtCursor(symbol)
+                                    when (symbol) {
+                                        "←" -> viewModel.moveCursorLeft()
+                                        "→" -> viewModel.moveCursorRight()
+                                        "if-else" -> {
+                                            val lang = activeTab.language.lowercase()
+                                            val snippet = if (lang == "python") "if condition:\n    pass\nelse:\n    pass" else "if (condition) {\n    \n} else {\n    \n}"
+                                            viewModel.insertSymbolAtCursor(snippet)
+                                        }
+                                        "for-loop" -> {
+                                            val lang = activeTab.language.lowercase()
+                                            val snippet = if (lang == "python") "for i in range(10):\n    pass" else "for (let i = 0; i < 10; i++) {\n    \n}"
+                                            viewModel.insertSymbolAtCursor(snippet)
+                                        }
+                                        "print()" -> {
+                                            val lang = activeTab.language.lowercase()
+                                            val snippet = when (lang) {
+                                                "python" -> "print(\"\")"
+                                                "kotlin" -> "println(\"\")"
+                                                "java" -> "System.out.println(\"\");"
+                                                else -> "console.log(\"\");"
+                                            }
+                                            viewModel.insertSymbolAtCursor(snippet)
+                                        }
+                                        "class" -> {
+                                            val lang = activeTab.language.lowercase()
+                                            val snippet = if (lang == "python") "class MyClass:\n    def __init__(self):\n        pass" else "class MyClass {\n    \n}"
+                                            viewModel.insertSymbolAtCursor(snippet)
+                                        }
+                                        "def" -> {
+                                            val lang = activeTab.language.lowercase()
+                                            val snippet = if (lang == "python") "def my_function():\n    pass" else "function myFunction() {\n    \n}"
+                                            viewModel.insertSymbolAtCursor(snippet)
+                                        }
+                                        else -> viewModel.insertSymbolAtCursor(symbol)
                                     }
                                 }
                                 .padding(horizontal = 12.dp),
@@ -490,11 +750,11 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         ) {
                             Text(
                                 text = symbol,
-                                color = theme.textColor,
+                                color = textCol,
                                 style = TextStyle(
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 13.sp
                                 )
                             )
                         }
@@ -536,6 +796,336 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
     }
 
+    // Theme Customizer Dialog (Premium)
+    if (showThemeSelectorDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeSelectorDialog = false },
+            title = { Text("Select Editor Theme", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EditorTheme.values().forEach { et ->
+                        val isSelected = et == theme
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.editorTheme = et
+                                    showThemeSelectorDialog = false
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = et.background
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF50FA7B) else Color.Gray.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = et.displayName,
+                                        color = et.textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = if (et.isDark) "Dark Mode" else "Light Mode",
+                                        color = et.commentColor,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = "Active", tint = Color(0xFF50FA7B))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeSelectorDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Local Git-Style Version snapshots and colored Diff Viewer Dialog (Premium)
+    if (showVersionHistoryDialog) {
+        val snapshots = viewModel.versionSnapshotsList
+        AlertDialog(
+            onDismissRequest = { showVersionHistoryDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFFBD93F9))
+                    Text("Local Version snapshots", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(380.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Every edit or manual save creates a local snapshot. Select a point in history to view line-by-line diffs and restore previous content instantly.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(modifier = Modifier.weight(1f)) {
+                        // Left: Snapshots timeline
+                        Column(
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .fillMaxHeight()
+                                .background(theme.lineNumbersBackground, shape = RoundedCornerShape(8.dp))
+                                .verticalScroll(rememberScrollState())
+                                .padding(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (snapshots.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("No snapshots saved.", fontSize = 11.sp, color = theme.lineNumbersText)
+                                }
+                            } else {
+                                snapshots.forEach { snapshot ->
+                                    val isSelected = selectedSnapshotForDiff?.id == snapshot.id
+                                    val formattedTime = SimpleDateFormat("HH:mm:ss dd/MM", Locale.getDefault()).format(Date(snapshot.timestamp))
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.Transparent,
+                                                shape = RoundedCornerShape(6.dp)
+                                            )
+                                            .clickable { selectedSnapshotForDiff = snapshot }
+                                            .padding(8.dp)
+                                    ) {
+                                        Text(
+                                            text = snapshot.triggerName,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = theme.textColor
+                                        )
+                                        Text(
+                                            text = formattedTime,
+                                            fontSize = 9.sp,
+                                            color = theme.lineNumbersText
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Right: Live Diff panel
+                        Column(
+                            modifier = Modifier
+                                .weight(1.9f)
+                                .fillMaxHeight()
+                                .background(theme.background, shape = RoundedCornerShape(8.dp))
+                                .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(4.dp)
+                        ) {
+                            val snapshot = selectedSnapshotForDiff
+                            if (snapshot == null) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Select a version to view diff.", fontSize = 11.sp, color = theme.lineNumbersText)
+                                }
+                            } else {
+                                val diffLines = SyntaxHighlighter.computeLineDiff(snapshot.content, activeTab?.content ?: "")
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalScroll(rememberScrollState())
+                                ) {
+                                    diffLines.forEach { line ->
+                                        when (line.type) {
+                                            SyntaxHighlighter.DiffType.UNCHANGED -> {
+                                                Text(
+                                                    text = "   ${line.text}",
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontSize = 10.sp,
+                                                    color = theme.textColor.copy(alpha = 0.7f),
+                                                    modifier = Modifier.padding(vertical = 1.dp)
+                                                )
+                                            }
+                                            SyntaxHighlighter.DiffType.ADDED -> {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(Color(0xFF15803D).copy(alpha = 0.15f))
+                                                        .padding(vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = " + ${line.text}",
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 10.sp,
+                                                        color = Color(0xFF4ADE80)
+                                                    )
+                                                }
+                                            }
+                                            SyntaxHighlighter.DiffType.DELETED -> {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .background(Color(0xFF991B1B).copy(alpha = 0.15f))
+                                                        .padding(vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = " - ${line.text}",
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontSize = 10.sp,
+                                                        color = Color(0xFFF87171)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    selectedSnapshotForDiff?.let { snap ->
+                        Button(
+                            onClick = {
+                                viewModel.restoreSnapshot(snap)
+                                showVersionHistoryDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48), contentColor = Color.White)
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Restore Selected", fontSize = 11.sp)
+                        }
+                    }
+                    TextButton(onClick = { showVersionHistoryDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
+    // Customizable Developer Quick Actions / Fast Shortcuts Dialog (Premium)
+    if (showQuickActionDialog) {
+        AlertDialog(
+            onDismissRequest = { showQuickActionDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.FlashOn, contentDescription = null, tint = Color(0xFFF1FA8C))
+                    Text("Developer Quick Actions", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Trigger multi-step operations to boost your coding productivity on mobile devices.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Divider(color = Color.Gray.copy(alpha = 0.2f))
+
+                    // 1. Format + Save + Run Action Card
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.triggerQuickAction("format_save_run")
+                                showQuickActionDialog = false
+                            },
+                        colors = CardDefaults.cardColors(containerColor = theme.lineNumbersBackground)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(Color(0xFFF1FA8C).copy(alpha = 0.15f), shape = CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFFF1FA8C))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Format, Save & Run", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = theme.textColor)
+                                Text("Beautify active file, save to storage, and launch in Console instantly.", fontSize = 11.sp, color = theme.lineNumbersText)
+                            }
+                        }
+                    }
+
+                    // 2. Line numbers toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Show Line Numbers", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = theme.textColor)
+                            Text("Toggle structural line indices", fontSize = 11.sp, color = theme.lineNumbersText)
+                        }
+                        Switch(
+                            checked = viewModel.showLineNumbers,
+                            onCheckedChange = { viewModel.showLineNumbers = it }
+                        )
+                    }
+
+                    // 3. Auto Suggestions toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Enable Auto-Suggestions", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = theme.textColor)
+                            Text("Display real-time word suggestions", fontSize = 11.sp, color = theme.lineNumbersText)
+                        }
+                        Switch(
+                            checked = viewModel.enableAutoComplete,
+                            onCheckedChange = { viewModel.enableAutoComplete = it }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQuickActionDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     // Save As Dialog
     if (showSaveAsDialog) {
         var fileError by remember { mutableStateOf<String?>(null) }
@@ -560,7 +1150,9 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 Text("Example: main.py, index.html", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().testTag("save_as_input")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("save_as_input")
                     )
                 }
             },
@@ -616,7 +1208,9 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 Text("Example: main.py, index.html, script.js", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().testTag("home_new_file_input")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("home_new_file_input")
                     )
                 }
             },
@@ -647,5 +1241,131 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun EditorPane(
+    tabId: Int,
+    viewModel: AppViewModel,
+    theme: EditorTheme,
+    isActive: Boolean,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tab = viewModel.openTabs.find { it.id == tabId } ?: return
+    val scrollState = rememberScrollState()
+    val lineCount = tab.content.split("\n").size
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .border(
+                width = if (isActive) 1.5.dp else 0.5.dp,
+                color = if (isActive) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.3f)
+            )
+            .clickable(enabled = !isActive) { onTap() }
+    ) {
+        // Pane Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (isActive) theme.lineNumbersBackground else Color.DarkGray.copy(alpha = 0.15f))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    imageVector = if (isActive) Icons.Default.EditNote else Icons.Default.Visibility,
+                    contentDescription = null,
+                    tint = if (isActive) MaterialTheme.colorScheme.primary else theme.lineNumbersText,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = tab.fileName,
+                    color = if (isActive) theme.textColor else theme.textColor.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = if (isActive) "ACTIVE" else "TAP TO FOCUS",
+                color = if (isActive) MaterialTheme.colorScheme.primary else Color.Gray,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            )
+        }
+
+        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // Line numbers column
+            if (viewModel.showLineNumbers) {
+                Column(
+                    modifier = Modifier
+                        .width(38.dp)
+                        .fillMaxHeight()
+                        .background(theme.lineNumbersBackground)
+                        .verticalScroll(scrollState)
+                        .padding(top = 8.dp, bottom = 8.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    for (i in 1..lineCount) {
+                        Text(
+                            text = "$i ",
+                            style = TextStyle(
+                                fontFamily = viewModel.getEditorFontFamily(),
+                                fontSize = viewModel.fontSize.sp,
+                                color = theme.lineNumbersText
+                            ),
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            // Text/Editor area
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .background(theme.background)
+                    .verticalScroll(scrollState)
+                    .padding(8.dp)
+            ) {
+                if (isActive) {
+                    BasicTextField(
+                        value = viewModel.editorTextFieldValue,
+                        onValueChange = { viewModel.updateEditorTextFieldValue(it) },
+                        textStyle = TextStyle(
+                            fontFamily = viewModel.getEditorFontFamily(),
+                            fontSize = viewModel.fontSize.sp,
+                            color = theme.textColor,
+                            lineHeight = (viewModel.fontSize * 1.3).sp
+                        ),
+                        cursorBrush = SolidColor(theme.cursorColor),
+                        visualTransformation = SyntaxHighlightingTransformation(tab.language, theme),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("code_editor_field_split"),
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false,
+                            imeAction = ImeAction.None
+                        )
+                    )
+                } else {
+                    val annotated = SyntaxHighlighter.highlight(tab.content, tab.language, theme)
+                    Text(
+                        text = annotated,
+                        style = TextStyle(
+                            fontFamily = viewModel.getEditorFontFamily(),
+                            fontSize = viewModel.fontSize.sp,
+                            color = theme.textColor.copy(alpha = 0.85f),
+                            lineHeight = (viewModel.fontSize * 1.3).sp
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
     }
 }

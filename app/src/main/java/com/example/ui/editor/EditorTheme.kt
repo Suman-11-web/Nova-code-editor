@@ -106,5 +106,20 @@ enum class EditorTheme(
         lineNumbersBackground = Color(0xFFF6F8FA),
         lineNumbersText = Color(0xFF959DA5),
         isDark = false
+    ),
+    DRACULA(
+        displayName = "Dracula",
+        background = Color(0xFF282A36),
+        textColor = Color(0xFFF8F8F2),
+        cursorColor = Color(0xFFF1FA8C),
+        commentColor = Color(0xFF6272A4),
+        stringColor = Color(0xFFF1FA8C),
+        keywordColor = Color(0xFFFF79C6),
+        numberColor = Color(0xFFBD93F9),
+        functionColor = Color(0xFF50FA7B),
+        operatorColor = Color(0xFFFFB86C),
+        lineNumbersBackground = Color(0xFF1E1F29),
+        lineNumbersText = Color(0xFF6272A4),
+        isDark = true
     )
 }

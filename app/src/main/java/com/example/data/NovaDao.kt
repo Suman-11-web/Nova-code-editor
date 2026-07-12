@@ -33,4 +33,20 @@ interface NovaDao {
 
     @Query("DELETE FROM editor_tabs")
     suspend fun clearAllEditorTabs()
+
+    // Version Snapshots
+    @Query("SELECT * FROM version_snapshots WHERE filePath = :filePath ORDER BY timestamp DESC")
+    fun getSnapshotsForFile(filePath: String): Flow<List<VersionSnapshot>>
+
+    @Query("SELECT * FROM version_snapshots WHERE filePath = :filePath ORDER BY timestamp DESC")
+    suspend fun getSnapshotsForFileDirect(filePath: String): List<VersionSnapshot>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSnapshot(snapshot: VersionSnapshot): Long
+
+    @Query("DELETE FROM version_snapshots WHERE filePath = :filePath")
+    suspend fun deleteSnapshotsForFile(filePath: String)
+
+    @Query("DELETE FROM version_snapshots")
+    suspend fun clearAllSnapshots()
 }

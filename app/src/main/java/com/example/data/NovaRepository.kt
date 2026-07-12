@@ -33,4 +33,25 @@ class NovaRepository(private val novaDao: NovaDao) {
     suspend fun clearAllEditorTabs() {
         novaDao.clearAllEditorTabs()
     }
+
+    // Version Snapshots
+    fun getSnapshotsForFile(filePath: String): Flow<List<VersionSnapshot>> {
+        return novaDao.getSnapshotsForFile(filePath)
+    }
+
+    suspend fun getSnapshotsForFileDirect(filePath: String): List<VersionSnapshot> {
+        return novaDao.getSnapshotsForFileDirect(filePath)
+    }
+
+    suspend fun insertSnapshot(snapshot: VersionSnapshot): Long {
+        return novaDao.insertSnapshot(snapshot)
+    }
+
+    suspend fun deleteSnapshotsForFile(filePath: String) {
+        novaDao.deleteSnapshotsForFile(filePath)
+    }
+
+    suspend fun clearAllSnapshots() {
+        novaDao.clearAllSnapshots()
+    }
 }

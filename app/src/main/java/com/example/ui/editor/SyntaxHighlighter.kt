@@ -228,4 +228,55 @@ object SyntaxHighlighter {
             }
         }
     }
+
+    enum class DiffType { UNCHANGED, ADDED, DELETED }
+    data class DiffLine(val type: DiffType, val text: String)
+
+    fun computeLineDiff(oldText: String, newText: String): List<DiffLine> {
+        val oldLines = oldText.split("\n")
+        val newLines = newText.split("\n")
+        
+        val diff = mutableListOf<DiffLine>()
+        var o = 0
+        var n = 0
+        while (o < oldLines.size || n < newLines.size) {
+            if (o < oldLines.size && n < newLines.size) {
+                val oldL = oldLines[o]
+                val newL = newLines[n]
+                if (oldL == newL) {
+                    diff.add(DiffLine(type = DiffType.UNCHANGED, text = oldL))
+                    o++
+                    n++
+                } else {
+                    val nextMatchInNew = newLines.subList(n, newLines.size).indexOf(oldL)
+                    if (nextMatchInNew > 0 && nextMatchInNew < 15) { // search limit to keep it extremely fast
+                        for (i in 0 until nextMatchInNew) {
+                            diff.add(DiffLine(type = DiffType.ADDED, text = newLines[n + i]))
+                        }
+                        n += nextMatchInNew
+                    } else {
+                        val nextMatchInOld = oldLines.subList(o, oldLines.size).indexOf(newL)
+                        if (nextMatchInOld > 0 && nextMatchInOld < 15) { // search limit to keep it extremely fast
+                            for (i in 0 until nextMatchInOld) {
+                                diff.add(DiffLine(type = DiffType.DELETED, text = oldLines[o + i]))
+                            }
+                            o += nextMatchInOld
+                        } else {
+                            diff.add(DiffLine(type = DiffType.DELETED, text = oldL))
+                            diff.add(DiffLine(type = DiffType.ADDED, text = newL))
+                            o++
+                            n++
+                        }
+                    }
+                }
+            } else if (o < oldLines.size) {
+                diff.add(DiffLine(type = DiffType.DELETED, text = oldLines[o]))
+                o++
+            } else if (n < newLines.size) {
+                diff.add(DiffLine(type = DiffType.ADDED, text = newLines[n]))
+                n++
+            }
+        }
+        return diff
+    }
 }

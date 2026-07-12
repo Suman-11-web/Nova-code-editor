@@ -18,6 +18,7 @@ import com.example.data.EditorTab
 import com.example.data.NovaDatabase
 import com.example.data.NovaRepository
 import com.example.data.RecentFile
+import com.example.data.VersionSnapshot
 import com.example.ui.editor.EditorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +83,75 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var showLineNumbers by mutableStateOf(true)
     var editorFontName by mutableStateOf("Monospace")
 
+    // High-End Split-Screen State
+    var isSplitScreenEnabled by mutableStateOf(false)
+    var activeLeftTabId by mutableStateOf<Int?>(null)
+    var activeRightTabId by mutableStateOf<Int?>(null)
+    var isVerticalSplit by mutableStateOf(true)
+    var selectedPane by mutableStateOf(0) // 0 = Left/Top, 1 = Right/Bottom
+
+    // Version Snapshots State
+    var versionSnapshotsList by mutableStateOf<List<VersionSnapshot>>(emptyList())
+    var currentHistoryFile by mutableStateOf<String?>(null)
+
+    fun createVersionSnapshot(filePath: String, content: String, trigger: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val currentSnapshotsList = repository.getSnapshotsForFileDirect(filePath)
+                if (currentSnapshotsList.isNotEmpty() && currentSnapshotsList[0].content == content) {
+                    return@launch
+                }
+                val snapshot = VersionSnapshot(
+                    filePath = filePath,
+                    content = content,
+                    triggerName = trigger,
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.insertSnapshot(snapshot)
+                if (currentHistoryFile == filePath) {
+                    loadVersionHistoryForActiveFile()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun loadVersionHistoryForActiveFile() {
+        val path = activeTab?.filePath ?: return
+        currentHistoryFile = path
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val it = repository.getSnapshotsForFileDirect(path)
+                withContext(Dispatchers.Main) {
+                    versionSnapshotsList = it
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun restoreSnapshot(snapshot: VersionSnapshot) {
+        val tab = activeTab ?: return
+        val updated = tab.copy(content = snapshot.content, isUnsaved = true)
+        activeTab = updated
+        updateEditorTextFieldValue(TextFieldValue(snapshot.content, TextRange(snapshot.content.length)))
+        saveCurrentFile()
+        loadVersionHistoryForActiveFile()
+    }
+
+    fun triggerQuickAction(actionType: String) {
+        when (actionType) {
+            "format_save_run" -> {
+                formatActiveCode()
+                saveCurrentFile()
+                runActiveCode()
+                navigateTo(Screen.CONSOLE)
+            }
+        }
+    }
+
     // Search and Replace
     var searchText by mutableStateOf("")
     var replaceText by mutableStateOf("")
@@ -125,7 +195,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private var isServerThreadRunning = false
     var localServerPort by mutableStateOf(8080)
     var isLocalServerRunning by mutableStateOf(false)
-    var useExternalStorage by mutableStateOf(false)
+    var useExternalStorage by mutableStateOf(true)
     
     // Interactive Run Input States
     var isInputRequested by mutableStateOf(false)
@@ -156,9 +226,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val database = NovaDatabase.getDatabase(application)
         repository = NovaRepository(database.novaDao())
         
-        // Load storage setting from SharedPreferences
+        // Load storage setting from SharedPreferences (default to true)
         val prefs = application.getSharedPreferences("nova_editor_prefs", android.content.Context.MODE_PRIVATE)
-        useExternalStorage = prefs.getBoolean("use_external_storage", false)
+        useExternalStorage = prefs.getBoolean("use_external_storage", true)
         if (useExternalStorage && hasStoragePermission(application)) {
             currentDirectory = File(Environment.getExternalStorageDirectory(), "Novacode")
         } else {
@@ -555,6 +625,78 @@ console.log(area);
         )
     }
 
+    fun moveCursorLeft() {
+        val selection = editorTextFieldValue.selection
+        if (selection.start > 0) {
+            val newPos = selection.start - 1
+            updateEditorTextFieldValue(
+                editorTextFieldValue.copy(selection = TextRange(newPos))
+            )
+        }
+    }
+
+    fun moveCursorRight() {
+        val selection = editorTextFieldValue.selection
+        if (selection.start < editorTextFieldValue.text.length) {
+            val newPos = selection.start + 1
+            updateEditorTextFieldValue(
+                editorTextFieldValue.copy(selection = TextRange(newPos))
+            )
+        }
+    }
+
+    fun insertSymbolAtCursor(symbol: String) {
+        val currentText = editorTextFieldValue.text
+        val selection = editorTextFieldValue.selection
+        val start = selection.start
+        val end = selection.end
+
+        when (symbol) {
+            "()" -> {
+                val newText = currentText.substring(0, start) + "()" + currentText.substring(end)
+                updateEditorTextFieldValue(
+                    TextFieldValue(
+                        text = newText,
+                        selection = TextRange(start + 1)
+                    )
+                )
+            }
+            "{}" -> {
+                val newText = currentText.substring(0, start) + "{}" + currentText.substring(end)
+                updateEditorTextFieldValue(
+                    TextFieldValue(
+                        text = newText,
+                        selection = TextRange(start + 1)
+                    )
+                )
+            }
+            "\"" -> {
+                val newText = currentText.substring(0, start) + "\"\"" + currentText.substring(end)
+                updateEditorTextFieldValue(
+                    TextFieldValue(
+                        text = newText,
+                        selection = TextRange(start + 1)
+                    )
+                )
+            }
+            "'" -> {
+                val newText = currentText.substring(0, start) + "''" + currentText.substring(end)
+                updateEditorTextFieldValue(
+                    TextFieldValue(
+                        text = newText,
+                        selection = TextRange(start + 1)
+                    )
+                )
+            }
+            "TAB" -> {
+                insertTextAtCursor("    ")
+            }
+            else -> {
+                insertTextAtCursor(symbol)
+            }
+        }
+    }
+
     // ----------------------------------------------------
     // EDITOR ACTIONS & TAB MANAGEMENT
     // ----------------------------------------------------
@@ -709,6 +851,7 @@ console.log(area);
                 file.writeText(tab.content)
                 val updated = tab.copy(isUnsaved = false)
                 activeTab = updated
+                createVersionSnapshot(path, tab.content, "Manual Save")
                 viewModelScope.launch {
                     repository.updateEditorTab(updated)
                 }
@@ -1070,16 +1213,102 @@ console.log(area);
             outputBuilder.append("--------------------------------------------------\n\n")
 
             try {
-                // Highly functional lightweight custom parser
+                // Highly functional lightweight custom parser with nested block/indentation control flow
                 val lines = code.split("\n")
                 var hasSyntaxError = false
                 val variables = mutableMapOf<String, String>()
 
-                for (index in lines.indices) {
-                    val line = lines[index].trim()
-                    if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue
+                // Nested block execution states
+                data class BlockState(val indent: Int, val conditionMet: Boolean, val isExecuting: Boolean)
+                val blockStack = mutableListOf<BlockState>()
+                blockStack.add(BlockState(indent = -1, conditionMet = true, isExecuting = true))
 
-                    // Basic variable assignments: e.g., name = input("enter your name") or x = 10
+                // Map to track the status of the last evaluated IF condition at each indentation level
+                val lastIfCondition = mutableMapOf<Int, Boolean>()
+
+                var index = 0
+                while (index < lines.size) {
+                    val originalLine = lines[index]
+                    val line = originalLine.trim()
+
+                    if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) {
+                        index++
+                        continue
+                    }
+
+                    // Compute indentation level of the line
+                    val indent = originalLine.takeWhile { it == ' ' }.length + originalLine.takeWhile { it == '\t' }.length * 4
+
+                    // Pop any block structures that have a greater or equal indentation
+                    while (blockStack.size > 1 && blockStack.last().indent >= indent) {
+                        blockStack.removeAt(blockStack.size - 1)
+                    }
+
+                    val currentBlock = blockStack.last()
+                    val isExecuting = currentBlock.isExecuting
+
+                    // Check for if statement
+                    if (line.startsWith("if ") || line.startsWith("if(")) {
+                        val conditionStr = if (line.startsWith("if ")) {
+                            line.substringAfter("if").substringBefore(":").substringBefore("{").trim()
+                        } else {
+                            line.substringAfter("if").substringBefore("{").trim().removePrefix("(").removeSuffix(")")
+                        }
+
+                        val conditionMet = if (isExecuting) evaluateCondition(conditionStr, variables) else false
+                        lastIfCondition[indent] = conditionMet
+
+                        val nextExecuting = isExecuting && conditionMet
+                        blockStack.add(BlockState(indent = indent, conditionMet = conditionMet, isExecuting = nextExecuting))
+                        index++
+                        continue
+                    }
+                    // Check for elif or else if statement
+                    else if (line.startsWith("elif ") || line.startsWith("else if")) {
+                        val conditionStr = if (line.startsWith("elif ")) {
+                            line.substringAfter("elif").substringBefore(":").substringBefore("{").trim()
+                        } else {
+                            line.substringAfter("else if").substringBefore("{").trim().removePrefix("(").removeSuffix(")")
+                        }
+
+                        val previousChainMet = lastIfCondition[indent] ?: false
+                        val conditionMet = if (isExecuting && !previousChainMet) evaluateCondition(conditionStr, variables) else false
+                        if (conditionMet) {
+                            lastIfCondition[indent] = true
+                        }
+
+                        val nextExecuting = isExecuting && conditionMet
+                        blockStack.add(BlockState(indent = indent, conditionMet = conditionMet, isExecuting = nextExecuting))
+                        index++
+                        continue
+                    }
+                    // Check for else statement
+                    else if (line.startsWith("else:") || line.startsWith("else {") || line == "else") {
+                        val previousChainMet = lastIfCondition[indent] ?: false
+                        val conditionMet = isExecuting && !previousChainMet
+
+                        val nextExecuting = isExecuting && conditionMet
+                        blockStack.add(BlockState(indent = indent, conditionMet = conditionMet, isExecuting = nextExecuting))
+                        index++
+                        continue
+                    }
+                    // Check for closing brace
+                    else if (line == "}") {
+                        if (blockStack.size > 1) {
+                            blockStack.removeAt(blockStack.size - 1)
+                        }
+                        index++
+                        continue
+                    }
+
+                    // Skip processing of statements inside deactivated blocks
+                    if (!isExecuting) {
+                        index++
+                        continue
+                    }
+
+                    // Process active statements
+                    // 1. Variable Assignment
                     if (line.contains("=") && !line.startsWith("if") && !line.startsWith("for") && !line.startsWith("while")) {
                         val parts = line.split("=", limit = 2)
                         val varName = parts[0].trim()
@@ -1153,7 +1382,7 @@ console.log(area);
                             variables[varName] = varValue
                         }
                     }
-                    // Standalone input prompt: e.g., input("Press any key...")
+                    // 2. Standalone Input Prompt
                     else if (line.startsWith("input(") || line.startsWith("prompt(")) {
                         val startP = line.indexOf("(") + 1
                         val endP = line.lastIndexOf(")")
@@ -1181,7 +1410,7 @@ console.log(area);
                         outputBuilder.append(userInputVal).append("\n")
                         consoleOutput = outputBuilder.toString()
                     }
-                    // Print/Log statements: print(), console.log(), System.out.println()
+                    // 3. Print / Log Statements
                     else if (line.startsWith("print(") || line.startsWith("console.log(") || line.startsWith("System.out.println(")) {
                         val startIdx = line.indexOf("(") + 1
                         val endIdx = line.lastIndexOf(")")
@@ -1275,6 +1504,8 @@ console.log(area);
                             break
                         }
                     }
+
+                    index++
                 }
 
                 // Fallback rendering/simulations if output is completely empty (e.g. metadata files)
@@ -1748,6 +1979,67 @@ console.log(area);
         } catch (e: Exception) {
             null
         }
+    }
+
+    fun evaluateCondition(conditionStr: String, variables: Map<String, String>): Boolean {
+        val clean = conditionStr.trim()
+        if (clean.isEmpty() || clean == "true" || clean == "True" || clean == "1") return true
+        if (clean == "false" || clean == "False" || clean == "0") return false
+
+        // Determine comparison operator
+        val operators = listOf("==", "!=", "<=", ">=", "<", ">")
+        var matchedOp: String? = null
+        for (op in operators) {
+            if (clean.contains(op)) {
+                matchedOp = op
+                break
+            }
+        }
+
+        if (matchedOp == null) {
+            // Truthy check for single variable or value
+            val valStr = resolveValue(clean, variables)
+            return valStr.isNotEmpty() && valStr != "false" && valStr != "False" && valStr != "0"
+        }
+
+        val parts = clean.split(matchedOp, limit = 2)
+        val left = resolveValue(parts[0], variables)
+        val right = resolveValue(parts[1], variables)
+
+        // Try numeric comparison first
+        val leftNum = left.toDoubleOrNull()
+        val rightNum = right.toDoubleOrNull()
+
+        if (leftNum != null && rightNum != null) {
+            return when (matchedOp) {
+                "==" -> leftNum == rightNum
+                "!=" -> leftNum != rightNum
+                "<" -> leftNum < rightNum
+                ">" -> leftNum > rightNum
+                "<=" -> leftNum <= rightNum
+                ">=" -> leftNum >= rightNum
+                else -> false
+            }
+        }
+
+        // Fallback to string comparison
+        return when (matchedOp) {
+            "==" -> left == right
+            "!=" -> left != right
+            "<" -> left < right
+            ">" -> left > right
+            "<=" -> left <= right
+            ">=" -> left >= right
+            else -> false
+        }
+    }
+
+    private fun resolveValue(rawExpr: String, variables: Map<String, String>): String {
+        val token = rawExpr.trim()
+        if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+            return token.substring(1, token.length - 1)
+        }
+        return variables[token] ?: token
     }
 
     fun runTerminalCommand(commandLine: String) {
