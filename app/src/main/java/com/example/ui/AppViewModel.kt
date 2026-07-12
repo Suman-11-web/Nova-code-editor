@@ -606,19 +606,81 @@ console.log(area);
                     val trimmedLastLine = lastLine.trim()
                     val extension = currentActive.fileName.substringAfterLast('.', "").lowercase()
                     
-                    val addExtraIndent = when {
-                        (extension == "py" || currentActive.language.lowercase() == "python") && trimmedLastLine.endsWith(":") -> true
-                        trimmedLastLine.endsWith("{") || trimmedLastLine.endsWith("[") || trimmedLastLine.endsWith("(") -> true
-                        else -> false
+                    val isHtmlFile = currentActive.fileName.lowercase().endsWith(".html") || currentActive.fileName.lowercase().endsWith(".htm") || currentActive.language.lowercase() == "html"
+                    val trimmed = trimmedLastLine.lowercase()
+                    
+                    var expanded = false
+                    if (isHtmlFile && trimmed.isNotEmpty() && !trimmed.contains("<") && !trimmed.contains(">") && !trimmed.contains(" ") && !trimmed.contains("/") && !trimmed.contains(";")) {
+                        val expansionPair = when (trimmed) {
+                            "h1" -> "<h1></h1>" to 4
+                            "h2" -> "<h2></h2>" to 4
+                            "h3" -> "<h3></h3>" to 4
+                            "h4" -> "<h4></h4>" to 4
+                            "h5" -> "<h5></h5>" to 4
+                            "h6" -> "<h6></h6>" to 4
+                            "p" -> "<p></p>" to 3
+                            "span" -> "<span></span>" to 6
+                            "div" -> "<div></div>" to 5
+                            "button" -> "<button></button>" to 8
+                            "a" -> "<a href=\"\"></a>" to 9
+                            "img" -> "<img src=\"\" alt=\"\">" to 10
+                            "input" -> "<input type=\"text\" name=\"\" id=\"\">" to 25
+                            "form" -> "<form action=\"\" method=\"post\">\n$leadingWhitespace    \n$leadingWhitespace</form>" to (30 + leadingWhitespace.length + 4)
+                            "link" -> "<link rel=\"stylesheet\" href=\"style.css\">" to 39
+                            "link:css" -> "<link rel=\"stylesheet\" href=\"style.css\">" to 39
+                            "script" -> "<script src=\"script.js\"></script>" to 33
+                            "script:src" -> "<script src=\"script.js\"></script>" to 33
+                            "ul" -> "<ul>\n$leadingWhitespace    <li></li>\n$leadingWhitespace</ul>" to (9 + leadingWhitespace.length)
+                            "ol" -> "<ol>\n$leadingWhitespace    <li></li>\n$leadingWhitespace</ol>" to (9 + leadingWhitespace.length)
+                            "li" -> "<li></li>" to 4
+                            "table" -> "<table>\n$leadingWhitespace    <tr>\n$leadingWhitespace        <td></td>\n$leadingWhitespace    </tr>\n$leadingWhitespace</table>" to (22 + leadingWhitespace.length * 3)
+                            "select" -> "<select name=\"\" id=\"\">\n$leadingWhitespace    <option value=\"\"></option>\n$leadingWhitespace</select>" to (14 + leadingWhitespace.length)
+                            "header" -> "<header></header>" to 8
+                            "footer" -> "<footer></footer>" to 8
+                            "main" -> "<main></main>" to 6
+                            "section" -> "<section></section>" to 9
+                            "article" -> "<article></article>" to 9
+                            "aside" -> "<aside></aside>" to 7
+                            "nav" -> "<nav></nav>" to 5
+                            "label" -> "<label for=\"\"></label>" to 12
+                            "textarea" -> "<textarea name=\"\" id=\"\" cols=\"30\" rows=\"10\"></textarea>" to 54
+                            "style" -> "<style>\n$leadingWhitespace    \n$leadingWhitespace</style>" to (8 + leadingWhitespace.length + 4)
+                            "iframe" -> "<iframe src=\"\" frameborder=\"0\"></iframe>" to 13
+                            "canvas" -> "<canvas id=\"\" width=\"\" height=\"\"></canvas>" to 11
+                            else -> null
+                        }
+                        
+                        if (expansionPair != null) {
+                            val expansionText = expansionPair.first
+                            val offset = expansionPair.second
+                            
+                            val lineStartIdx = typedCharIndex - lastLine.length
+                            val trimmedStartIdx = lineStartIdx + lastLine.takeWhile { it.isWhitespace() }.length
+                            
+                            val newText = text.substring(0, trimmedStartIdx) + expansionText + text.substring(typedCharIndex + 1)
+                            adjustedValue = TextFieldValue(
+                                text = newText,
+                                selection = TextRange(trimmedStartIdx + offset)
+                            )
+                            expanded = true
+                        }
                     }
-                    val extraIndent = if (addExtraIndent) "    " else ""
-                    val autoInsertedText = leadingWhitespace + extraIndent
-                    if (autoInsertedText.isNotEmpty()) {
-                        val newText = text.substring(0, typedCharIndex + 1) + autoInsertedText + text.substring(typedCharIndex + 1)
-                        adjustedValue = TextFieldValue(
-                            text = newText,
-                            selection = TextRange(typedCharIndex + 1 + autoInsertedText.length)
-                        )
+                    
+                    if (!expanded) {
+                        val addExtraIndent = when {
+                            (extension == "py" || currentActive.language.lowercase() == "python") && trimmedLastLine.endsWith(":") -> true
+                            trimmedLastLine.endsWith("{") || trimmedLastLine.endsWith("[") || trimmedLastLine.endsWith("(") -> true
+                            else -> false
+                        }
+                        val extraIndent = if (addExtraIndent) "    " else ""
+                        val autoInsertedText = leadingWhitespace + extraIndent
+                        if (autoInsertedText.isNotEmpty()) {
+                            val newText = text.substring(0, typedCharIndex + 1) + autoInsertedText + text.substring(typedCharIndex + 1)
+                            adjustedValue = TextFieldValue(
+                                text = newText,
+                                selection = TextRange(typedCharIndex + 1 + autoInsertedText.length)
+                            )
+                        }
                     }
                 } else if (typedChar == '>') {
                     val isHtml = currentActive.fileName.lowercase().endsWith(".html") || currentActive.fileName.lowercase().endsWith(".htm")
@@ -1065,7 +1127,226 @@ console.log(area);
         val newFile = File(currentDirectory, cleanName)
         try {
             if (!newFile.exists()) {
-                newFile.createNewFile()
+                val ext = newFile.extension.lowercase()
+                val boilerplate = when (ext) {
+                    "html", "htm" -> """
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Nova Live Preview Webpage</title>
+                            <style>
+                                :root {
+                                    --primary-color: #6366f1;
+                                    --primary-hover: #4f46e5;
+                                    --bg-color: #0f172a;
+                                    --card-bg: #1e293b;
+                                    --text-color: #f8fafc;
+                                    --text-muted: #94a3b8;
+                                }
+                                
+                                * {
+                                    box-sizing: border-box;
+                                    margin: 0;
+                                    padding: 0;
+                                }
+                                
+                                body {
+                                    font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+                                    background-color: var(--bg-color);
+                                    color: var(--text-color);
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    justify-content: center;
+                                    min-height: 100vh;
+                                    padding: 2rem;
+                                    text-align: center;
+                                }
+                                
+                                .container {
+                                    max-width: 600px;
+                                    background-color: var(--card-bg);
+                                    padding: 2.5rem;
+                                    border-radius: 16px;
+                                    border: 1px solid rgba(255, 255, 255, 0.08);
+                                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+                                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                                }
+                                
+                                .container:hover {
+                                    transform: translateY(-4px);
+                                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+                                }
+                                
+                                h1 {
+                                    font-size: 2.5rem;
+                                    color: var(--text-color);
+                                    margin-bottom: 1rem;
+                                    background: linear-gradient(to right, #818cf8, #c084fc);
+                                    -webkit-background-clip: text;
+                                    -webkit-text-fill-color: transparent;
+                                }
+                                
+                                p {
+                                    font-size: 1.1rem;
+                                    color: var(--text-muted);
+                                    line-height: 1.6;
+                                    margin-bottom: 2rem;
+                                }
+                                
+                                .btn {
+                                    background-color: var(--primary-color);
+                                    color: white;
+                                    font-weight: 600;
+                                    padding: 0.75rem 1.75rem;
+                                    border: none;
+                                    border-radius: 8px;
+                                    cursor: pointer;
+                                    transition: background-color 0.2s, transform 0.1s;
+                                    font-size: 1rem;
+                                }
+                                
+                                .btn:hover {
+                                    background-color: var(--primary-hover);
+                                }
+                                
+                                .btn:active {
+                                    transform: scale(0.97);
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <h1>Nova Code Editor</h1>
+                                <p>This is your fully live HTML & CSS Web Preview running dynamically. Edit files, save, and check output in real-time!</p>
+                                <button class="btn" onclick="alert('Congratulations! Web scripts are active.')">Test Interactivity</button>
+                            </div>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    "css" -> """
+                        /* Nova Code Editor - Professional Styling Sheet */
+                        :root {
+                            --primary-color: #6366f1;
+                            --primary-hover: #4f46e5;
+                            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+                            --card-bg: rgba(30, 41, 59, 0.8);
+                            --text-primary: #f8fafc;
+                            --text-secondary: #94a3b8;
+                            --accent: #38bdf8;
+                            --spacing-unit: 1rem;
+                            --shadow-elevation: 0 8px 30px rgba(0, 0, 0, 0.25);
+                        }
+
+                        * {
+                            box-sizing: border-box;
+                            margin: 0;
+                            padding: 0;
+                        }
+
+                        body {
+                            background: var(--bg-gradient);
+                            color: var(--text-primary);
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            line-height: 1.5;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                        }
+
+                        .card {
+                            background: var(--card-bg);
+                            backdrop-filter: blur(12px);
+                            border: 1px solid rgba(255, 255, 255, 0.1);
+                            border-radius: 1rem;
+                            padding: calc(var(--spacing-unit) * 2.5);
+                            max-width: 480px;
+                            width: 100%;
+                            box-shadow: var(--shadow-elevation);
+                            text-align: center;
+                            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                        }
+
+                        .card:hover {
+                            transform: translateY(-8px);
+                        }
+
+                        .highlight {
+                            color: var(--accent);
+                            font-weight: 700;
+                        }
+                    """.trimIndent()
+                    "js", "ts" -> """
+                        // Nova Client-Side or Backend JavaScript Starter
+                        console.log("Hello from Nova Code Editor!");
+
+                        // Active browser window detection:
+                        if (typeof window !== 'undefined') {
+                            window.addEventListener('DOMContentLoaded', () => {
+                                console.log("Webpage DOM loaded successfully!");
+                                const body = document.body;
+                                if (body) {
+                                    console.log("Adding dynamic styles...");
+                                }
+                            });
+                        }
+                    """.trimIndent()
+                    "py" -> """
+                        # Nova Python / Flask Starter Code
+                        print("Hello from Nova Interpreter!")
+
+                        # Uncomment to host a Flask dynamic server:
+                        # from flask import Flask
+                        # app = Flask(__name__)
+                        #
+                        # @app.route('/')
+                        # def index():
+                        #     return "<h1>Hello from Flask!</h1>"
+                    """.trimIndent()
+                    "cpp", "cc" -> """
+                        #include <iostream>
+                        using namespace std;
+
+                        int main() {
+                            cout << "hello World!" << endl;
+                            return 0;
+                        }
+                    """.trimIndent()
+                    "c" -> """
+                        #include <stdio.h>
+
+                        int main() {
+                            printf("hello World!\n");
+                            return 0;
+                        }
+                    """.trimIndent()
+                    "java" -> """
+                        public class Main {
+                            public static void main(String[] args) {
+                                System.out.println("Hello World from Java!");
+                            }
+                        }
+                    """.trimIndent()
+                    "go" -> """
+                        package main
+
+                        import "fmt"
+
+                        func main() {
+                            fmt.Println("Hello World from Go!")
+                        }
+                    """.trimIndent()
+                    "rs" -> """
+                        fn main() {
+                            println!("Hello World from Rust!");
+                        }
+                    """.trimIndent()
+                    else -> ""
+                }
+                newFile.writeText(boilerplate)
                 refreshFileTree()
                 openFileInEditor(newFile)
             }
@@ -1234,8 +1515,12 @@ console.log(area);
             return
         }
 
-        // Check if HTML or Web code
-        if (lang == "html" || lang == "css" || lang == "javascript" || ext == "html" || ext == "htm" || ext == "js" || ext == "css") {
+        // Check if HTML or Web code (only redirect JS/TS to web preview if it appears to be client-side web script)
+        val isWebFile = lang == "html" || lang == "css" || ext == "html" || ext == "htm" || ext == "css" ||
+                ((lang == "javascript" || ext == "js" || ext == "ts") && 
+                 (code.contains("document.") || code.contains("window.") || code.contains("alert(") || code.contains("<html>") || code.contains("<body>")))
+
+        if (isWebFile) {
             // Force save current state first
             saveCurrentFile()
             
@@ -1468,32 +1753,200 @@ console.log(area);
                         consoleOutput = outputBuilder.toString()
                     }
                     // 3. Print / Log Statements
-                    else if (line.startsWith("print(") || line.startsWith("console.log(") || line.startsWith("System.out.println(")) {
+                    else if (line.contains("cout") && line.contains("<<")) {
+                        val postCout = line.substringAfter("cout").trim().removePrefix("<<").trim().removeSuffix(";").trim()
+                        val parts = splitOutsideQuotes(postCout, "<<")
+                        val lineBuilder = StringBuilder()
+                        for (part in parts) {
+                            val trimmed = part.trim()
+                            if (trimmed == "endl" || trimmed == "std::endl") {
+                                lineBuilder.append("\n")
+                            } else if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                                lineBuilder.append(trimmed.substring(1, trimmed.length - 1))
+                            } else {
+                                lineBuilder.append(variables[trimmed] ?: trimmed)
+                            }
+                        }
+                        var outputStr = lineBuilder.toString()
+                        outputStr = outputStr.replace("\\n", "\n")
+                        outputBuilder.append(outputStr)
+                        if (!line.contains("endl") && !line.contains("\\n")) {
+                            outputBuilder.append("\n")
+                        }
+                        consoleOutput = outputBuilder.toString()
+                    }
+                    else if (line.startsWith("printf(") || line.contains("printf(")) {
+                        val startIdx = line.indexOf("printf(") + 7
+                        val endIdx = line.lastIndexOf(")")
+                        if (endIdx > startIdx) {
+                            val expr = line.substring(startIdx, endIdx).trim()
+                            val tokens = splitOutsideQuotes(expr, ",")
+                            if (tokens.isNotEmpty()) {
+                                var formatStr = tokens[0]
+                                if ((formatStr.startsWith("\"") && formatStr.endsWith("\"")) || (formatStr.startsWith("'") && formatStr.endsWith("'"))) {
+                                    formatStr = formatStr.substring(1, formatStr.length - 1)
+                                }
+                                var output = formatStr
+                                for (vIdx in 1 until tokens.size) {
+                                    val token = tokens[vIdx].trim()
+                                    val valStr = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                        token.substring(1, token.length - 1)
+                                    } else {
+                                        variables[token] ?: token
+                                    }
+                                    output = output.replaceFirst(Regex("%[dsfcy]"), valStr)
+                                }
+                                output = output.replace("\\n", "\n")
+                                outputBuilder.append(output)
+                                if (!formatStr.contains("\\n")) {
+                                    outputBuilder.append("\n")
+                                }
+                                consoleOutput = outputBuilder.toString()
+                            }
+                        }
+                    }
+                    else if (line.startsWith("println!(") || line.startsWith("print!(") || line.contains("println!(") || line.contains("print!(")) {
+                        val key = if (line.contains("println!(")) "println!(" else "print!("
+                        val startIdx = line.indexOf(key) + key.length
+                        val endIdx = line.lastIndexOf(")")
+                        if (endIdx > startIdx) {
+                            val expr = line.substring(startIdx, endIdx).trim()
+                            val tokens = splitOutsideQuotes(expr, ",")
+                            if (tokens.isNotEmpty()) {
+                                var formatStr = tokens[0]
+                                if ((formatStr.startsWith("\"") && formatStr.endsWith("\"")) || (formatStr.startsWith("'") && formatStr.endsWith("'"))) {
+                                    formatStr = formatStr.substring(1, formatStr.length - 1)
+                                }
+                                var output = formatStr
+                                for (vIdx in 1 until tokens.size) {
+                                    val token = tokens[vIdx].trim()
+                                    val valStr = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                        token.substring(1, token.length - 1)
+                                    } else {
+                                        variables[token] ?: token
+                                    }
+                                    output = output.replaceFirst("{}", valStr)
+                                }
+                                output = output.replace("\\n", "\n")
+                                outputBuilder.append(output)
+                                if (key.startsWith("println")) {
+                                    outputBuilder.append("\n")
+                                }
+                                consoleOutput = outputBuilder.toString()
+                            }
+                        }
+                    }
+                    else if (line.contains("fmt.Println(") || line.contains("fmt.Print(")) {
+                        val key = if (line.contains("fmt.Println(")) "fmt.Println(" else "fmt.Print("
+                        val startIdx = line.indexOf(key) + key.length
+                        val endIdx = line.lastIndexOf(")")
+                        if (endIdx > startIdx) {
+                            val expr = line.substring(startIdx, endIdx).trim()
+                            val tokens = splitOutsideQuotes(expr, ",")
+                            val printResults = mutableListOf<String>()
+                            for (token in tokens) {
+                                val trimmed = token.trim()
+                                val cleanToken = if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                                    trimmed.substring(1, trimmed.length - 1)
+                                } else {
+                                    variables[trimmed] ?: trimmed
+                                }
+                                printResults.add(cleanToken)
+                            }
+                            var output = printResults.joinToString(" ").replace("\\n", "\n")
+                            outputBuilder.append(output)
+                            if (key.contains("Println")) {
+                                outputBuilder.append("\n")
+                            }
+                            consoleOutput = outputBuilder.toString()
+                        }
+                    }
+                    else if (line.contains("Console.WriteLine(") || line.contains("Console.Write(")) {
+                        val key = if (line.contains("Console.WriteLine(")) "Console.WriteLine(" else "Console.Write("
+                        val startIdx = line.indexOf(key) + key.length
+                        val endIdx = line.lastIndexOf(")")
+                        if (endIdx > startIdx) {
+                            val expr = line.substring(startIdx, endIdx).trim().removeSuffix(";").trim()
+                            val tokens = splitOutsideQuotes(expr, ",")
+                            if (tokens.isNotEmpty()) {
+                                var formatStr = tokens[0]
+                                if ((formatStr.startsWith("\"") && formatStr.endsWith("\"")) || (formatStr.startsWith("'") && formatStr.endsWith("'"))) {
+                                    formatStr = formatStr.substring(1, formatStr.length - 1)
+                                }
+                                var output = formatStr
+                                for (vIdx in 1 until tokens.size) {
+                                    val token = tokens[vIdx].trim()
+                                    val valStr = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                        token.substring(1, token.length - 1)
+                                    } else {
+                                        variables[token] ?: token
+                                    }
+                                    output = output.replace("{$ {vIdx - 1}}", valStr).replace("{${vIdx - 1}}", valStr)
+                                }
+                                output = output.replace("\\n", "\n")
+                                outputBuilder.append(output)
+                                if (key.contains("WriteLine")) {
+                                    outputBuilder.append("\n")
+                                }
+                                consoleOutput = outputBuilder.toString()
+                            }
+                        }
+                    }
+                    else if (line.startsWith("echo ") || line.startsWith("echo(") || line.startsWith("print ") || line.startsWith("print(")) {
+                        val isEcho = line.startsWith("echo")
+                        val expr = if (isEcho) {
+                            if (line.startsWith("echo(")) line.substringAfter("(").substringBeforeLast(")").trim()
+                            else line.substringAfter("echo ").trim().removeSuffix(";").trim()
+                        } else {
+                            if (line.startsWith("print(")) line.substringAfter("(").substringBeforeLast(")").trim()
+                            else line.substringAfter("print ").trim().removeSuffix(";").trim()
+                        }
+                        val tokens = splitOutsideQuotes(expr, ".")
+                        val lineBuilder = StringBuilder()
+                        for (token in tokens) {
+                            val trimmed = token.trim()
+                            var cleanToken = if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                                trimmed.substring(1, trimmed.length - 1)
+                            } else {
+                                val varKey = trimmed.removePrefix("$")
+                                variables[varKey] ?: variables[trimmed] ?: trimmed
+                            }
+                            variables.forEach { (k, v) ->
+                                cleanToken = cleanToken.replace("$$k", v).replace(k, v)
+                            }
+                            lineBuilder.append(cleanToken)
+                        }
+                        var output = lineBuilder.toString().replace("\\n", "\n")
+                        outputBuilder.append(output).append("\n")
+                        consoleOutput = outputBuilder.toString()
+                    }
+                    else if (line.startsWith("puts ") || (line.startsWith("print ") && lang == "ruby")) {
+                        val isPuts = line.startsWith("puts ")
+                        val expr = if (isPuts) line.substringAfter("puts ").trim() else line.substringAfter("print ").trim()
+                        var valStr = if ((expr.startsWith("\"") && expr.endsWith("\"")) || (expr.startsWith("'") && expr.endsWith("'"))) {
+                            expr.substring(1, expr.length - 1)
+                        } else {
+                            variables[expr] ?: expr
+                        }
+                        variables.forEach { (k, v) ->
+                            valStr = valStr.replace("#{$k}", v)
+                        }
+                        valStr = valStr.replace("\\n", "\n")
+                        outputBuilder.append(valStr)
+                        if (isPuts) {
+                            outputBuilder.append("\n")
+                        }
+                        consoleOutput = outputBuilder.toString()
+                    }
+                    else if (line.startsWith("print(") || line.startsWith("println(") || line.startsWith("console.log(") || 
+                             line.startsWith("console.info(") || line.startsWith("console.warn(") || line.startsWith("console.error(") || 
+                             line.startsWith("System.out.println(") || line.startsWith("System.out.print(") || line.startsWith("log(")) {
+                        
                         val startIdx = line.indexOf("(") + 1
                         val endIdx = line.lastIndexOf(")")
                         if (endIdx > startIdx) {
                             val expr = line.substring(startIdx, endIdx).trim()
-
-                            // Parse potential comma-separated arguments: print("Value is", x)
-                            val tokens = mutableListOf<String>()
-                            var currentToken = StringBuilder()
-                            var insideSingleQuote = false
-                            var insideDoubleQuote = false
-                            for (char in expr) {
-                                if (char == '\'' && !insideDoubleQuote) {
-                                    insideSingleQuote = !insideSingleQuote
-                                    currentToken.append(char)
-                                } else if (char == '"' && !insideSingleQuote) {
-                                    insideDoubleQuote = !insideDoubleQuote
-                                    currentToken.append(char)
-                                } else if (char == ',' && !insideSingleQuote && !insideDoubleQuote) {
-                                    tokens.add(currentToken.toString().trim())
-                                    currentToken = StringBuilder()
-                                } else {
-                                    currentToken.append(char)
-                                }
-                            }
-                            tokens.add(currentToken.toString().trim())
+                            val tokens = splitOutsideQuotes(expr, ",")
 
                             if (tokens.size > 1) {
                                 val printResults = mutableListOf<String>()
@@ -1505,13 +1958,14 @@ console.log(area);
                                     }
                                     printResults.add(cleanToken)
                                 }
-                                outputBuilder.append(printResults.joinToString(" ")).append("\n")
+                                var output = printResults.joinToString(" ").replace("\\n", "\n")
+                                outputBuilder.append(output).append("\n")
                             } else {
                                 val token = tokens[0]
                                 if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
-                                    outputBuilder.append(token.substring(1, token.length - 1)).append("\n")
+                                    var output = token.substring(1, token.length - 1).replace("\\n", "\n")
+                                    outputBuilder.append(output).append("\n")
                                 } else {
-                                    // Try substituting variables and evaluating mathematically
                                     var mathExpr = token
                                     variables.forEach { (k, v) ->
                                         mathExpr = mathExpr.replace(k, v)
@@ -1521,9 +1975,8 @@ console.log(area);
                                         val displayResult = if (mathResult % 1.0 == 0.0) mathResult.toLong().toString() else mathResult.toString()
                                         outputBuilder.append(displayResult).append("\n")
                                     } else {
-                                        // Fallback to simple variable lookup or string concatenation
                                         if (token.contains("+")) {
-                                            val partsOfSum = token.split("+")
+                                            val partsOfSum = splitOutsideQuotes(token, "+")
                                             val sumBuilder = StringBuilder()
                                             var numericSum = 0.0
                                             var isNumeric = true
@@ -1545,10 +1998,12 @@ console.log(area);
                                                 val displayResult = if (numericSum % 1.0 == 0.0) numericSum.toLong().toString() else numericSum.toString()
                                                 outputBuilder.append(displayResult).append("\n")
                                             } else {
-                                                outputBuilder.append(sumBuilder.toString()).append("\n")
+                                                var output = sumBuilder.toString().replace("\\n", "\n")
+                                                outputBuilder.append(output).append("\n")
                                             }
                                         } else {
-                                            outputBuilder.append(variables[token] ?: token).append("\n")
+                                            var output = (variables[token] ?: token).replace("\\n", "\n")
+                                            outputBuilder.append(output).append("\n")
                                         }
                                     }
                                 }
@@ -1749,11 +2204,32 @@ console.log(area);
             )
             lang == "html" || ext == "html" || ext == "htm" -> listOf(
                 "html", "head", "body", "div", "span", "p", "a", "img", "button", "input", "form", "label", "ul", "ol", "li", "table", "tr", "td", "th", "style", "script", "link", "meta", "title",
-                "class", "id", "href", "src", "alt", "placeholder", "type", "value", "onclick", "style=\"\"", "<!DOCTYPE html>"
+                "class", "id", "href", "src", "alt", "placeholder", "type", "value", "onclick", "style=\"\"", "<!DOCTYPE html>",
+                "nav", "header", "footer", "section", "article", "aside", "main", "canvas", "svg", "video", "audio", "iframe", "picture", "source", "template", "slot", "dialog", "progress", "meter", "details", "summary",
+                "loading=\"lazy\"", "decoding=\"async\"", "srcset", "sizes", "crossorigin", "integrity", "defer", "async", "contenteditable", "spellcheck", "draggable"
             )
             lang == "css" || ext == "css" -> listOf(
-                "margin", "padding", "color", "background-color", "font-size", "font-family", "font-weight", "text-align", "display: flex;", "display: block;", "display: grid;",
-                "justify-content", "align-items", "border", "border-radius", "width", "height", "position", "top", "bottom", "left", "right", "z-index", "box-shadow", "cursor", "transition"
+                "margin", "padding", "color", "background-color", "font-size", "font-family", "font-weight", "text-align", 
+                "display: flex;", "display: block;", "display: grid;", "display: inline-block;", "display: none;",
+                "justify-content", "align-items", "flex-direction", "flex-wrap", "gap", "grid-template-columns", "grid-template-rows",
+                "border", "border-radius", "width", "height", "max-width", "max-height", "min-width", "min-height",
+                "position: absolute;", "position: relative;", "position: fixed;", "position: sticky;", "top", "bottom", "left", "right", "z-index", 
+                "box-shadow", "text-shadow", "cursor: pointer;", "transition: all 0.3s ease;", "transform", "animation",
+                "backdrop-filter", "clip-path", "opacity", "overflow: hidden;", "box-sizing: border-box;",
+                "background: linear-gradient(", "var(--", "calc(", "clamp(", "aspect-ratio", "mix-blend-mode",
+                "align-content", "justify-items", "place-items", "grid-area", "grid-column", "grid-row",
+                "border-color", "border-style", "border-width", "outline", "line-height", "letter-spacing",
+                "text-transform: uppercase;", "text-transform: lowercase;", "text-decoration", "font-style",
+                "overflow-x", "overflow-y", "white-space: nowrap;", "text-overflow: ellipsis;",
+                "flex-grow", "flex-shrink", "flex-basis", "align-self", "justify-self",
+                "background-image", "background-size", "background-position", "background-repeat", "background-attachment",
+                "filter: blur(", "filter: brightness(", "filter: contrast(", "filter: grayscale(", "filter: hue-rotate(",
+                "filter: invert(", "filter: opacity(", "filter: saturate(", "filter: sepia(", "filter: drop-shadow(",
+                "@media (max-width: 768px) {", "@media (max-width: 1024px) {", "@media (min-width: 640px) {",
+                ":root {", "var(--primary)", "var(--secondary)", "var(--accent)",
+                ":hover", ":active", ":focus", ":focus-within", ":disabled", ":first-child", ":last-child", ":nth-child(",
+                "::before", "::after", "scroll-behavior: smooth;", "user-select: none;", "pointer-events: none;",
+                "will-change", "object-fit: cover;", "object-fit: contain;", "column-count", "column-gap"
             )
             lang == "sql" || ext == "sql" -> listOf(
                 "select", "insert", "update", "delete", "from", "where", "join", "left", "right", "inner", "outer", "on", "group by", "order by", "having", "limit", "offset", "create", "table", "index", "drop", "alter", "primary key", "foreign key", "unique", "not null", "null", "and", "or", "not", "in", "exists", "like", "between", "as"
@@ -2082,6 +2558,35 @@ console.log(area);
             activeHostedServerName = null
             activeHostedServerPort = null
         }
+    }
+
+    fun splitOutsideQuotes(text: String, delimiter: String): List<String> {
+        val result = mutableListOf<String>()
+        val currentToken = StringBuilder()
+        var insideSingleQuote = false
+        var insideDoubleQuote = false
+        var i = 0
+        while (i < text.length) {
+            val char = text[i]
+            if (char == '\'' && !insideDoubleQuote) {
+                insideSingleQuote = !insideSingleQuote
+                currentToken.append(char)
+                i++
+            } else if (char == '"' && !insideSingleQuote) {
+                insideDoubleQuote = !insideDoubleQuote
+                currentToken.append(char)
+                i++
+            } else if (!insideSingleQuote && !insideDoubleQuote && text.startsWith(delimiter, i)) {
+                result.add(currentToken.toString().trim())
+                currentToken.setLength(0)
+                i += delimiter.length
+            } else {
+                currentToken.append(char)
+                i++
+            }
+        }
+        result.add(currentToken.toString().trim())
+        return result
     }
 
     private val installedPipPackages = mutableSetOf<String>()
