@@ -296,14 +296,6 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
                         label = { Text("Console") },
                         modifier = Modifier.testTag("nav_console_tab")
                     )
-                    // Navigation item: Shortcuts Button
-                    NavigationBarItem(
-                        selected = viewModel.showShortcutsDialog,
-                        onClick = { viewModel.showShortcutsDialog = true },
-                        icon = { Icon(Icons.Default.Keyboard, contentDescription = "Shortcuts") },
-                        label = { Text("Shortcuts") },
-                        modifier = Modifier.testTag("nav_shortcuts_tab")
-                    )
                     // Navigation item: Settings
                     NavigationBarItem(
                         selected = currentScreen == Screen.SETTINGS,

@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -391,6 +392,59 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 imeAction = ImeAction.None
                             )
                         )
+                    }
+                }
+
+                // Code Auto-Suggestions Row
+                val suggestions = viewModel.getSuggestionsForCurrentWord()
+                if (suggestions.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (theme.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Suggestions:",
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                color = if (theme.isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        suggestions.forEach { suggestion ->
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.15f) else Color(0xFF0284C7).copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (theme.isDark) Color(0xFF38BDF8).copy(alpha = 0.4f) else Color(0xFF0284C7).copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        viewModel.selectSuggestion(suggestion)
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    style = TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 12.sp,
+                                        color = if (theme.isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
 

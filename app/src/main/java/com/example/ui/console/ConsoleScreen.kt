@@ -285,7 +285,7 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         .weight(1f)
                         .padding(12.dp)
                 ) {
-                    // Terminal output text history
+                    // Terminal output text history & prompt inside the same scrollable container!
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -293,12 +293,12 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             .background(Color(0xFF0F172A), shape = MaterialTheme.shapes.small)
                             .padding(12.dp)
                     ) {
-                        SelectionContainer {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(terminalScrollState)
-                            ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(terminalScrollState)
+                        ) {
+                            SelectionContainer {
                                 Text(
                                     text = viewModel.terminalHistory,
                                     style = TextStyle(
@@ -309,68 +309,65 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                     )
                                 )
                             }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Input Prompt Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFF1E293B), shape = RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = viewModel.getTerminalPrompt(),
-                            style = TextStyle(
-                                color = Color(0xFF22C55E), // green prompt text
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        BasicTextField(
-                            value = viewModel.terminalInput,
-                            onValueChange = { viewModel.terminalInput = it },
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Send
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onSend = {
-                                    if (viewModel.terminalInput.isNotBlank()) {
-                                        viewModel.runTerminalCommand(viewModel.terminalInput)
-                                        viewModel.terminalInput = ""
-                                    }
+                            
+                            // In-line Input Prompt Row right inside the scrollable box!
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = viewModel.getTerminalPrompt(),
+                                    style = TextStyle(
+                                        color = Color(0xFF22C55E), // green prompt text
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                BasicTextField(
+                                    value = viewModel.terminalInput,
+                                    onValueChange = { viewModel.terminalInput = it },
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Send
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onSend = {
+                                            if (viewModel.terminalInput.isNotBlank()) {
+                                                viewModel.runTerminalCommand(viewModel.terminalInput)
+                                                viewModel.terminalInput = ""
+                                            }
+                                        }
+                                    ),
+                                    textStyle = TextStyle(
+                                        color = Color.White,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.sp
+                                    ),
+                                    cursorBrush = SolidColor(Color.White),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("terminal_input_field")
+                                )
+                                IconButton(
+                                    onClick = {
+                                        if (viewModel.terminalInput.isNotBlank()) {
+                                            viewModel.runTerminalCommand(viewModel.terminalInput)
+                                            viewModel.terminalInput = ""
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Execute Command",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
-                            ),
-                            textStyle = TextStyle(
-                                color = Color.White,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp
-                            ),
-                            cursorBrush = SolidColor(Color.White),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("terminal_input_field")
-                        )
-                        IconButton(
-                            onClick = {
-                                if (viewModel.terminalInput.isNotBlank()) {
-                                    viewModel.runTerminalCommand(viewModel.terminalInput)
-                                    viewModel.terminalInput = ""
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Execute Command",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            }
                         }
                     }
                 }

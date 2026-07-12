@@ -102,9 +102,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     // Console States
-    var consoleOutput by mutableStateOf("Nova Terminal ready.\nSelect a file and click 'Run' to compile and execute.")
+    var consoleOutput by mutableStateOf(">>> ")
     var consoleError by mutableStateOf("")
     var isConsoleRunning by mutableStateOf(false)
+
+    // Hosted backend routes & ports (Flask, Express)
+    var activeHostedServerPort by mutableStateOf<Int?>(null)
+    var activeHostedServerName by mutableStateOf<String?>(null)
+    val hostedServerRoutes = mutableMapOf<String, String>()
+    val installedNpmPackages = mutableSetOf<String>()
 
     // Local Host Server and Storage States
     private var serverSocket: java.net.ServerSocket? = null
@@ -281,6 +287,31 @@ console.log(area);
                 }
 
                 if (method == "GET") {
+                    // Check if hosting a Python (Flask) or Node.js (Express) backend server
+                    if (activeHostedServerPort != null) {
+                        val cleanPath = path.substringBefore("?").removePrefix("/")
+                        val lookups = listOf(cleanPath, "/$cleanPath", cleanPath.removeSuffix("index.html").removeSuffix("/"))
+                        var responseText: String? = null
+                        for (key in lookups) {
+                            if (hostedServerRoutes.containsKey(key)) {
+                                responseText = hostedServerRoutes[key]
+                                break
+                            }
+                        }
+                        if (responseText == null) {
+                            responseText = hostedServerRoutes[""] ?: "<h3>Nova Backend Live Server</h3><p>Server <b>$activeHostedServerName</b> running on port $activeHostedServerPort.</p>"
+                        }
+                        val bytes = responseText.toByteArray()
+                        val outputStream = clientSocket.getOutputStream()
+                        outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                        outputStream.write("Content-Type: text/html\r\n".toByteArray())
+                        outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
+                        outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                        outputStream.write(bytes)
+                        outputStream.flush()
+                        return@thread
+                    }
+
                     var file = File(currentDirectory, path)
                     if (file.isDirectory) {
                         file = File(file, "index.html")
@@ -870,9 +901,56 @@ console.log(area);
             return
         }
 
-        // Check if HTML or Web code
+        val code = tab.content
         val lang = tab.language.lowercase()
         val ext = tab.fileName.substringAfterLast('.', "").lowercase()
+
+        val isFlask = (lang == "python" || ext == "py") && (code.contains("flask") || code.contains("Flask"))
+        val isExpress = (lang == "javascript" || lang == "typescript" || ext == "js" || ext == "ts") && code.contains("express")
+
+        if (isFlask) {
+            saveCurrentFile()
+            if (!installedPipPackages.contains("flask")) {
+                consoleOutput = "ModuleNotFoundError: No module named 'flask'\n\nTry running 'pip install flask' in the Interactive Terminal."
+                consoleError = "Error: flask is not installed"
+                navigateTo(Screen.CONSOLE)
+                return
+            }
+            parseAndHostBackend(code, "python")
+            if (!isLocalServerRunning) {
+                startLocalServer()
+            }
+            val port = activeHostedServerPort ?: 5000
+            consoleOutput = ">>> Running ${tab.fileName}...\n* Serving Flask app '${tab.fileName.substringBeforeLast(".")}'\n* Debug mode: on\n* Running on http://127.0.0.1:$port/ (Press CTRL+C to quit)\n* Serving dynamic background endpoints successfully!"
+            consoleError = ""
+            webPreviewUrl = "http://127.0.0.1:$localServerPort/"
+            showWebPreview = true
+            navigateTo(Screen.CONSOLE)
+            return
+        }
+
+        if (isExpress) {
+            saveCurrentFile()
+            if (!installedNpmPackages.contains("express")) {
+                consoleOutput = "Error: Cannot find module 'express'\n\nTry running 'npm install express' in the Interactive Terminal."
+                consoleError = "Error: express is not installed"
+                navigateTo(Screen.CONSOLE)
+                return
+            }
+            parseAndHostBackend(code, "javascript")
+            if (!isLocalServerRunning) {
+                startLocalServer()
+            }
+            val port = activeHostedServerPort ?: 3000
+            consoleOutput = ">>> Running ${tab.fileName}...\n[nodemon] starting `node ${tab.fileName}`\nServer running at http://127.0.0.1:$port/\nExpress routing table active on background live host!"
+            consoleError = ""
+            webPreviewUrl = "http://127.0.0.1:$localServerPort/"
+            showWebPreview = true
+            navigateTo(Screen.CONSOLE)
+            return
+        }
+
+        // Check if HTML or Web code
         if (lang == "html" || lang == "css" || lang == "javascript" || ext == "html" || ext == "htm" || ext == "js" || ext == "css") {
             // Force save current state first
             saveCurrentFile()
@@ -1074,7 +1152,7 @@ console.log(area);
     }
 
     fun clearConsole() {
-        consoleOutput = "Console cleared.\nNova Code Editor simulation runtime ready."
+        consoleOutput = ">>> "
         consoleError = ""
     }
 
@@ -1086,9 +1164,155 @@ console.log(area);
     var terminalHistory by mutableStateOf("Nova Terminal Shell v1.0\nType 'help' to see list of available commands.\n\n")
 
     fun getTerminalPrompt(): String {
-        val rootPath = getApplication<Application>().filesDir.parent ?: ""
-        val displayPath = terminalCwd.absolutePath.replace(rootPath, "~")
-        return "nova@android:$displayPath$ "
+        val root = currentDirectory.absolutePath
+        val cwd = terminalCwd.absolutePath
+        val displayPath = if (cwd == root) {
+            "~/"
+        } else if (cwd.startsWith(root)) {
+            val relative = cwd.substring(root.length).removePrefix("/")
+            "home/$relative"
+        } else {
+            cwd
+        }
+        return "$displayPath $ "
+    }
+
+    // ----------------------------------------------------
+    // AUTO SUGGESTION / AUTOCOMPLETE SYSTEM
+    // ----------------------------------------------------
+    fun getActiveWord(): String {
+        val text = editorTextFieldValue.text
+        val cursor = editorTextFieldValue.selection.start
+        if (cursor <= 0 || cursor > text.length) return ""
+        
+        var start = cursor - 1
+        while (start >= 0) {
+            val char = text[start]
+            if (!char.isLetterOrDigit() && char != '_' && char != '@') {
+                break
+            }
+            start--
+        }
+        start++
+        
+        return if (start < cursor) text.substring(start, cursor) else ""
+    }
+
+    fun getSuggestionsForCurrentWord(): List<String> {
+        val word = getActiveWord().lowercase()
+        if (word.isEmpty()) return emptyList()
+
+        val lang = activeTab?.language?.lowercase() ?: "python"
+        val ext = activeTab?.fileName?.substringAfterLast('.', "")?.lowercase() ?: ""
+        
+        val candidates = when {
+            lang == "python" || ext == "py" -> listOf(
+                "import", "from", "print", "def", "return", "class", "if", "else", "elif", "while", "for", "in", "try", "except", "pass", "True", "False", "None", "self", "as",
+                "flask", "Flask", "app = Flask(__name__)", "route", "app.run(port=5000)", "methods", "jsonify", "request", "render_template", "redirect", "url_for",
+                "pip install", "django", "numpy", "pandas", "requests", "math", "random", "json", "sys", "os"
+            )
+            lang == "javascript" || lang == "typescript" || ext == "js" || ext == "ts" -> listOf(
+                "const", "let", "var", "function", "return", "class", "if", "else", "while", "for", "import", "export", "from", "default", "try", "catch", "finally", "true", "false", "null", "undefined",
+                "express", "express()", "app.get", "app.post", "app.listen(3000)", "req", "res", "send", "json", "require", "module.exports",
+                "console.log", "document", "window", "setTimeout", "setInterval", "addEventListener", "fetch", "Promise", "async", "await"
+            )
+            lang == "html" || ext == "html" || ext == "htm" -> listOf(
+                "html", "head", "body", "div", "span", "p", "a", "img", "button", "input", "form", "label", "ul", "ol", "li", "table", "tr", "td", "th", "style", "script", "link", "meta", "title",
+                "class", "id", "href", "src", "alt", "placeholder", "type", "value", "onclick", "style=\"\"", "<!DOCTYPE html>"
+            )
+            lang == "css" || ext == "css" -> listOf(
+                "margin", "padding", "color", "background-color", "font-size", "font-family", "font-weight", "text-align", "display: flex;", "display: block;", "display: grid;",
+                "justify-content", "align-items", "border", "border-radius", "width", "height", "position", "top", "bottom", "left", "right", "z-index", "box-shadow", "cursor", "transition"
+            )
+            else -> listOf(
+                "if", "else", "while", "for", "return", "function", "class", "import", "true", "false"
+            )
+        }
+
+        return candidates.filter { it.lowercase().startsWith(word) && it.lowercase() != word }
+    }
+
+    fun selectSuggestion(suggestion: String) {
+        val text = editorTextFieldValue.text
+        val cursor = editorTextFieldValue.selection.start
+        if (cursor < 0 || cursor > text.length) return
+        
+        var start = cursor - 1
+        while (start >= 0) {
+            val char = text[start]
+            if (!char.isLetterOrDigit() && char != '_' && char != '@') {
+                break
+            }
+            start--
+        }
+        start++
+        
+        val newText = text.substring(0, start) + suggestion + text.substring(cursor)
+        val newCursorPos = start + suggestion.length
+        
+        updateEditorTextFieldValue(
+            androidx.compose.ui.text.input.TextFieldValue(
+                text = newText,
+                selection = androidx.compose.ui.text.TextRange(newCursorPos)
+            )
+        )
+    }
+
+    // ----------------------------------------------------
+    // DYNAMIC BACKEND FLASK & EXPRESS COMPILER AND HOSTING
+    // ----------------------------------------------------
+    fun parseAndHostBackend(content: String, language: String) {
+        hostedServerRoutes.clear()
+        
+        val isFlask = language.lowercase() == "python" && (content.contains("flask") || content.contains("Flask"))
+        val isExpress = (language.lowercase() == "javascript" || language.lowercase() == "typescript") && content.contains("express")
+        
+        if (isFlask) {
+            activeHostedServerName = "Flask"
+            var port = 5000
+            val portRegex = Regex("""port\s*=\s*(\d+)""")
+            portRegex.find(content)?.let {
+                port = it.groupValues[1].toIntOrNull() ?: 5000
+            }
+            activeHostedServerPort = port
+            
+            // Regex to match python flask route decorators and function return values
+            val routeRegex = Regex("""@app\.route\(\s*["']([^"']+)["'].*?\)[\s\S]*?def\s+\w+\(\s*\):[\s\S]*?return\s+["']([^"']+)["']""")
+            val matches = routeRegex.findAll(content)
+            for (match in matches) {
+                val path = match.groupValues[1].removePrefix("/")
+                val response = match.groupValues[2]
+                hostedServerRoutes[path] = response
+            }
+            
+            if (!hostedServerRoutes.containsKey("")) {
+                hostedServerRoutes[""] = "<h2>Hello from Python Flask backend!</h2><p>Server running on port $port</p>"
+            }
+        } else if (isExpress) {
+            activeHostedServerName = "Express.js"
+            var port = 3000
+            val portRegex = Regex("""listen\(\s*(\d+)""")
+            portRegex.find(content)?.let {
+                port = it.groupValues[1].toIntOrNull() ?: 3000
+            }
+            activeHostedServerPort = port
+            
+            // Regex to match express route handlers and responses
+            val routeRegex = Regex("""app\.(get|post|use)\(\s*["']([^"']+)["'].*?res\.send\(\s*["']([^"']+)["']""")
+            val matches = routeRegex.findAll(content)
+            for (match in matches) {
+                val path = match.groupValues[2].removePrefix("/")
+                val response = match.groupValues[3]
+                hostedServerRoutes[path] = response
+            }
+            
+            if (!hostedServerRoutes.containsKey("")) {
+                hostedServerRoutes[""] = "<h2>Hello from Node.js Express backend!</h2><p>Server running on port $port</p>"
+            }
+        } else {
+            activeHostedServerName = null
+            activeHostedServerPort = null
+        }
     }
 
     private val installedPipPackages = mutableSetOf<String>()
@@ -1116,7 +1340,9 @@ console.log(area);
                       rm <file_or_dir>     Delete file or directory (recursively)
                       cat <file_name>      Print file contents
                       pip install <pkg>    Install Python pip packages (simulated/real fallback)
-                      python <file_name>   Run custom Python script interpreter
+                      npm install <pkg>    Install Node packages (simulated)
+                      python <file_name>   Run custom Python script / Flask backend
+                      node <file_name>     Run Javascript script / Express.js backend
                       echo <text>          Print text to the terminal
                       uname                Print system details
                 """.trimIndent() + "\n\n"
@@ -1273,6 +1499,25 @@ console.log(area);
                     terminalHistory += "Usage: pip install <package_name>\n\n"
                 }
             }
+            "npm" -> {
+                if (parts.size >= 3 && parts[1] == "install") {
+                    val pkgName = parts[2]
+                    terminalHistory += "npm fetch metadata ...\n"
+                    
+                    viewModelScope.launch {
+                        kotlinx.coroutines.delay(400)
+                        terminalHistory += "npm WARN deprecated $pkgName-1.0.0: No repository field.\n"
+                        kotlinx.coroutines.delay(600)
+                        terminalHistory += "added 12 packages from 8 contributors in 1.45s\n"
+                        kotlinx.coroutines.delay(300)
+                        terminalHistory += "audited 12 packages in 2.1s\n"
+                        terminalHistory += "Successfully installed $pkgName\n\n"
+                        installedNpmPackages.add(pkgName)
+                    }
+                } else {
+                    terminalHistory += "Usage: npm install <package_name>\n\n"
+                }
+            }
             "python" -> {
                 if (parts.size < 2) {
                     terminalHistory += "Python 3.10.4 Interactive Simulator\nUse 'python <file_name>' to run a script.\n\n"
@@ -1288,6 +1533,21 @@ console.log(area);
                     }
                 }
             }
+            "node" -> {
+                if (parts.size < 2) {
+                    terminalHistory += "Node.js v18.16.0 Interactive Simulator\nUse 'node <file_name>' to run a script.\n\n"
+                } else {
+                    val name = parts[1]
+                    val file = File(terminalCwd, name)
+                    if (file.exists() && file.isFile) {
+                        val content = file.readText()
+                        terminalHistory += ">>> Running $name...\n"
+                        executeNodeCodeInTerminal(content, name)
+                    } else {
+                        terminalHistory += "node: can't open file '$name': No such file or directory\n\n"
+                    }
+                }
+            }
             else -> {
                 runRealSystemCommand(trimmed)
             }
@@ -1295,6 +1555,23 @@ console.log(area);
     }
 
     private fun executePythonCodeInTerminal(code: String) {
+        val isFlask = code.contains("flask") || code.contains("Flask")
+        if (isFlask) {
+            if (!installedPipPackages.contains("flask")) {
+                terminalHistory += "ModuleNotFoundError: No module named 'flask'\n\nTry running 'pip install flask' in the terminal first.\n\n"
+                return
+            }
+            parseAndHostBackend(code, "python")
+            if (!isLocalServerRunning) {
+                startLocalServer()
+            }
+            val port = activeHostedServerPort ?: 5000
+            terminalHistory += "* Serving Flask app 'app'\n* Debug mode: on\n* Running on http://127.0.0.1:$port/ (Press CTRL+C to quit)\n* Serving dynamic background endpoints successfully!\n\n"
+            webPreviewUrl = "http://127.0.0.1:$localServerPort/"
+            showWebPreview = true
+            return
+        }
+
         val lines = code.split("\n")
         val variables = mutableMapOf<String, String>()
         val outputBuilder = StringBuilder()
@@ -1353,6 +1630,45 @@ console.log(area);
         if (!hasSyntaxError) {
             terminalHistory += outputBuilder.toString() + "\n"
         }
+    }
+
+    private fun executeNodeCodeInTerminal(code: String, name: String) {
+        val isExpress = code.contains("express")
+        if (isExpress) {
+            if (!installedNpmPackages.contains("express")) {
+                terminalHistory += "Error: Cannot find module 'express'\n\nTry running 'npm install express' in the terminal first.\n\n"
+                return
+            }
+            parseAndHostBackend(code, "javascript")
+            if (!isLocalServerRunning) {
+                startLocalServer()
+            }
+            val port = activeHostedServerPort ?: 3000
+            terminalHistory += "[nodemon] starting `node $name`\nServer running at http://127.0.0.1:$port/\nExpress routing table active on background live host!\n\n"
+            webPreviewUrl = "http://127.0.0.1:$localServerPort/"
+            showWebPreview = true
+            return
+        }
+
+        val lines = code.split("\n")
+        val outputBuilder = StringBuilder()
+        for (index in lines.indices) {
+            val line = lines[index].trim()
+            if (line.isEmpty() || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) continue
+            if (line.startsWith("console.log(")) {
+                val startIdx = line.indexOf("(") + 1
+                val endIdx = line.lastIndexOf(")")
+                if (endIdx > startIdx) {
+                    val expr = line.substring(startIdx, endIdx).trim()
+                    if ((expr.startsWith("\"") && expr.endsWith("\"")) || (expr.startsWith("'") && expr.endsWith("'"))) {
+                        outputBuilder.append(expr.substring(1, expr.length - 1)).append("\n")
+                    } else {
+                        outputBuilder.append(expr).append("\n")
+                    }
+                }
+            }
+        }
+        terminalHistory += outputBuilder.toString() + "\n"
     }
 
     private fun runRealSystemCommand(commandLine: String) {
