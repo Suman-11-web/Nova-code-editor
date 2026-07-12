@@ -1134,149 +1134,19 @@ console.log(area);
                         <html lang="en">
                         <head>
                             <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <title>Nova Live Preview Webpage</title>
-                            <style>
-                                :root {
-                                    --primary-color: #6366f1;
-                                    --primary-hover: #4f46e5;
-                                    --bg-color: #0f172a;
-                                    --card-bg: #1e293b;
-                                    --text-color: #f8fafc;
-                                    --text-muted: #94a3b8;
-                                }
-                                
-                                * {
-                                    box-sizing: border-box;
-                                    margin: 0;
-                                    padding: 0;
-                                }
-                                
-                                body {
-                                    font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-                                    background-color: var(--bg-color);
-                                    color: var(--text-color);
-                                    display: flex;
-                                    flex-direction: column;
-                                    align-items: center;
-                                    justify-content: center;
-                                    min-height: 100vh;
-                                    padding: 2rem;
-                                    text-align: center;
-                                }
-                                
-                                .container {
-                                    max-width: 600px;
-                                    background-color: var(--card-bg);
-                                    padding: 2.5rem;
-                                    border-radius: 16px;
-                                    border: 1px solid rgba(255, 255, 255, 0.08);
-                                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-                                    transition: transform 0.3s ease, box-shadow 0.3s ease;
-                                }
-                                
-                                .container:hover {
-                                    transform: translateY(-4px);
-                                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
-                                }
-                                
-                                h1 {
-                                    font-size: 2.5rem;
-                                    color: var(--text-color);
-                                    margin-bottom: 1rem;
-                                    background: linear-gradient(to right, #818cf8, #c084fc);
-                                    -webkit-background-clip: text;
-                                    -webkit-text-fill-color: transparent;
-                                }
-                                
-                                p {
-                                    font-size: 1.1rem;
-                                    color: var(--text-muted);
-                                    line-height: 1.6;
-                                    margin-bottom: 2rem;
-                                }
-                                
-                                .btn {
-                                    background-color: var(--primary-color);
-                                    color: white;
-                                    font-weight: 600;
-                                    padding: 0.75rem 1.75rem;
-                                    border: none;
-                                    border-radius: 8px;
-                                    cursor: pointer;
-                                    transition: background-color 0.2s, transform 0.1s;
-                                    font-size: 1rem;
-                                }
-                                
-                                .btn:hover {
-                                    background-color: var(--primary-hover);
-                                }
-                                
-                                .btn:active {
-                                    transform: scale(0.97);
-                                }
-                            </style>
+                            <meta name="viewport" content="width=device-width,initial-scale=1.0">
+                            <title>Document</title>
                         </head>
                         <body>
-                            <div class="container">
-                                <h1>Nova Code Editor</h1>
-                                <p>This is your fully live HTML & CSS Web Preview running dynamically. Edit files, save, and check output in real-time!</p>
-                                <button class="btn" onclick="alert('Congratulations! Web scripts are active.')">Test Interactivity</button>
-                            </div>
+                                
                         </body>
                         </html>
                     """.trimIndent()
                     "css" -> """
-                        /* Nova Code Editor - Professional Styling Sheet */
-                        :root {
-                            --primary-color: #6366f1;
-                            --primary-hover: #4f46e5;
-                            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-                            --card-bg: rgba(30, 41, 59, 0.8);
-                            --text-primary: #f8fafc;
-                            --text-secondary: #94a3b8;
-                            --accent: #38bdf8;
-                            --spacing-unit: 1rem;
-                            --shadow-elevation: 0 8px 30px rgba(0, 0, 0, 0.25);
-                        }
-
                         * {
-                            box-sizing: border-box;
                             margin: 0;
                             padding: 0;
-                        }
-
-                        body {
-                            background: var(--bg-gradient);
-                            color: var(--text-primary);
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                            line-height: 1.5;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            min-height: 100vh;
-                        }
-
-                        .card {
-                            background: var(--card-bg);
-                            backdrop-filter: blur(12px);
-                            border: 1px solid rgba(255, 255, 255, 0.1);
-                            border-radius: 1rem;
-                            padding: calc(var(--spacing-unit) * 2.5);
-                            max-width: 480px;
-                            width: 100%;
-                            box-shadow: var(--shadow-elevation);
-                            text-align: center;
-                            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-                        }
-
-                        .card:hover {
-                            transform: translateY(-8px);
-                        }
-
-                        .highlight {
-                            color: var(--accent);
-                            font-weight: 700;
+                            box-sizing: border-box;
                         }
                     """.trimIndent()
                     "js", "ts" -> """

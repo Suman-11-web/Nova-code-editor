@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AppViewModel
@@ -728,32 +729,36 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 } else {
                     // Standard Single Editor Mode
                     val codeText = activeTab.content
-                    Row(modifier = Modifier.weight(1f)) {
-                        val scrollState = rememberScrollState()
-                        val lineCount = codeText.split("\n").size
+                    val scrollState = rememberScrollState()
+                    val lineCount = codeText.split("\n").size
 
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .background(theme.background)
+                            .verticalScroll(scrollState)
+                    ) {
                         // Line numbers column
                         if (viewModel.showLineNumbers) {
-                            Column(
+                            val lineNumbersText = (1..lineCount).joinToString("\n")
+                            Box(
                                 modifier = Modifier
-                                    .width(42.dp)
-                                    .fillMaxHeight()
+                                    .width(46.dp)
                                     .background(theme.lineNumbersBackground)
-                                    .verticalScroll(scrollState)
-                                    .padding(top = 12.dp, bottom = 12.dp),
-                                horizontalAlignment = Alignment.End
+                                    .padding(top = 12.dp, bottom = 12.dp, end = 8.dp),
+                                contentAlignment = Alignment.TopEnd
                             ) {
-                                for (i in 1..lineCount) {
-                                    Text(
-                                        text = "$i ",
-                                        style = TextStyle(
-                                            fontFamily = viewModel.getEditorFontFamily(),
-                                            fontSize = viewModel.fontSize.sp,
-                                            color = theme.lineNumbersText
-                                        ),
-                                        modifier = Modifier.padding(end = 4.dp)
+                                Text(
+                                    text = lineNumbersText,
+                                    style = TextStyle(
+                                        fontFamily = viewModel.getEditorFontFamily(),
+                                        fontSize = viewModel.fontSize.sp,
+                                        color = theme.lineNumbersText,
+                                        lineHeight = (viewModel.fontSize * 1.3).sp,
+                                        textAlign = TextAlign.End
                                     )
-                                }
+                                )
                             }
                         }
 
@@ -761,9 +766,14 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxHeight()
                                 .background(theme.background)
-                                .verticalScroll(scrollState)
+                                .then(
+                                    if (!viewModel.wordWrap) {
+                                        Modifier.horizontalScroll(rememberScrollState())
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .padding(12.dp)
                         ) {
                             BasicTextField(
@@ -778,7 +788,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 cursorBrush = SolidColor(theme.cursorColor),
                                 visualTransformation = SyntaxHighlightingTransformation(activeTab.language, theme),
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .then(if (viewModel.wordWrap) Modifier.fillMaxWidth() else Modifier)
                                     .testTag("code_editor_field"),
                                 keyboardOptions = KeyboardOptions(
                                     autoCorrectEnabled = false,
@@ -1470,29 +1480,33 @@ fun EditorPane(
             )
         }
 
-        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(theme.background)
+                .verticalScroll(scrollState)
+        ) {
             // Line numbers column
             if (viewModel.showLineNumbers) {
-                Column(
+                val lineNumbersText = (1..lineCount).joinToString("\n")
+                Box(
                     modifier = Modifier
-                        .width(38.dp)
-                        .fillMaxHeight()
+                        .width(42.dp)
                         .background(theme.lineNumbersBackground)
-                        .verticalScroll(scrollState)
-                        .padding(top = 8.dp, bottom = 8.dp),
-                    horizontalAlignment = Alignment.End
+                        .padding(top = 8.dp, bottom = 8.dp, end = 6.dp),
+                    contentAlignment = Alignment.TopEnd
                 ) {
-                    for (i in 1..lineCount) {
-                        Text(
-                            text = "$i ",
-                            style = TextStyle(
-                                fontFamily = viewModel.getEditorFontFamily(),
-                                fontSize = viewModel.fontSize.sp,
-                                color = theme.lineNumbersText
-                            ),
-                            modifier = Modifier.padding(end = 4.dp)
+                    Text(
+                        text = lineNumbersText,
+                        style = TextStyle(
+                            fontFamily = viewModel.getEditorFontFamily(),
+                            fontSize = viewModel.fontSize.sp,
+                            color = theme.lineNumbersText,
+                            lineHeight = (viewModel.fontSize * 1.3).sp,
+                            textAlign = TextAlign.End
                         )
-                    }
+                    )
                 }
             }
 
@@ -1500,9 +1514,14 @@ fun EditorPane(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
                     .background(theme.background)
-                    .verticalScroll(scrollState)
+                    .then(
+                        if (!viewModel.wordWrap) {
+                            Modifier.horizontalScroll(rememberScrollState())
+                        } else {
+                            Modifier
+                        }
+                    )
                     .padding(8.dp)
             ) {
                 if (isActive) {
@@ -1518,7 +1537,7 @@ fun EditorPane(
                         cursorBrush = SolidColor(theme.cursorColor),
                         visualTransformation = SyntaxHighlightingTransformation(tab.language, theme),
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .then(if (viewModel.wordWrap) Modifier.fillMaxWidth() else Modifier)
                             .testTag("code_editor_field_split"),
                         keyboardOptions = KeyboardOptions(
                             autoCorrectEnabled = false,
@@ -1535,7 +1554,7 @@ fun EditorPane(
                             color = theme.textColor.copy(alpha = 0.85f),
                             lineHeight = (viewModel.fontSize * 1.3).sp
                         ),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.then(if (viewModel.wordWrap) Modifier.fillMaxWidth() else Modifier)
                     )
                 }
             }
