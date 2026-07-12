@@ -309,7 +309,7 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
         }
     ) { innerPadding ->
         val screenModifier = Modifier
-            .padding(innerPadding)
+            .padding(bottom = innerPadding.calculateBottomPadding())
             
         when (currentScreen) {
             Screen.EDITOR -> EditorScreen(viewModel = viewModel, modifier = screenModifier)

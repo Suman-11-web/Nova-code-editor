@@ -34,6 +34,7 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         topBar = {
             Column {
                 TopAppBar(
+                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
@@ -200,6 +201,140 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             onCheckedChange = { viewModel.wordWrap = it },
                             modifier = Modifier.testTag("word_wrap_switch")
                         )
+                    }
+                }
+            }
+
+            // Show line numbers switch
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.FormatListNumbered, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Show Line Numbers", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Display editor line counting on the left", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = viewModel.showLineNumbers,
+                            onCheckedChange = { viewModel.showLineNumbers = it },
+                            modifier = Modifier.testTag("show_line_numbers_switch")
+                        )
+                    }
+                }
+            }
+
+            // Auto-complete suggestion switch
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("IntelliSense Suggestions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Contextual keyword autocompletion", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = viewModel.enableAutoComplete,
+                            onCheckedChange = { viewModel.enableAutoComplete = it },
+                            modifier = Modifier.testTag("enable_autocomplete_switch")
+                        )
+                    }
+                }
+            }
+
+            // Auto-close brackets & quotes switch
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DataObject, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Auto-close Brackets & Quotes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Insert matching ), ], }, \", ' automatically", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Switch(
+                            checked = viewModel.autoCloseBrackets,
+                            onCheckedChange = { viewModel.autoCloseBrackets = it },
+                            modifier = Modifier.testTag("auto_close_brackets_switch")
+                        )
+                    }
+                }
+            }
+
+            // Font Selector card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.TextFields, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Coding Font Family", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(10.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val fonts = listOf("Monospace", "Serif", "SansSerif", "Cursive")
+                            fonts.forEach { fontName ->
+                                val isSelected = viewModel.editorFontName == fontName
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                                        .clickable { viewModel.editorFontName = fontName }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = fontName,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.EditorTab
@@ -74,6 +75,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var fontSize by mutableStateOf(14f)
     var wordWrap by mutableStateOf(false)
     var editorTheme by mutableStateOf(EditorTheme.ELEGANT_DARK)
+    
+    // High-End Code Editor Customization Options
+    var enableAutoComplete by mutableStateOf(true)
+    var autoCloseBrackets by mutableStateOf(true)
+    var showLineNumbers by mutableStateOf(true)
+    var editorFontName by mutableStateOf("Monospace")
 
     // Search and Replace
     var searchText by mutableStateOf("")
@@ -85,7 +92,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val redoStacks = mutableMapOf<Int, Stack<String>>()
 
     // File Manager States
-    var currentDirectory by mutableStateOf<File>(File(application.filesDir, "NovaProjects"))
+    var currentDirectory by mutableStateOf<File>(File(application.filesDir, "Novacode"))
         private set
     
     var fileTreeList by mutableStateOf<List<File>>(emptyList())
@@ -384,7 +391,7 @@ console.log(area);
         if (external) {
             if (hasStoragePermission(context)) {
                 useExternalStorage = true
-                currentDirectory = File(Environment.getExternalStorageDirectory(), "NovaProjects")
+                currentDirectory = File(Environment.getExternalStorageDirectory(), "Novacode")
                 if (!currentDirectory.exists()) {
                     currentDirectory.mkdirs()
                 }
@@ -392,7 +399,7 @@ console.log(area);
             }
         } else {
             useExternalStorage = false
-            currentDirectory = File(getApplication<Application>().filesDir, "NovaProjects")
+            currentDirectory = File(getApplication<Application>().filesDir, "Novacode")
             if (!currentDirectory.exists()) {
                 currentDirectory.mkdirs()
             }
@@ -422,30 +429,70 @@ console.log(area);
         if (text.length == oldText.length + 1) {
             val selectionStart = newValue.selection.start
             val typedCharIndex = selectionStart - 1
-            if (typedCharIndex in text.indices && text[typedCharIndex] == '>') {
-                val isHtml = currentActive.fileName.lowercase().endsWith(".html") || currentActive.fileName.lowercase().endsWith(".htm")
-                if (isHtml) {
-                    var leftAngleIndex = -1
-                    for (i in (typedCharIndex - 1) downTo 0) {
-                        if (text[i] == '>') break
-                        if (text[i] == '<') {
-                            leftAngleIndex = i
-                            break
-                        }
+            if (typedCharIndex in text.indices) {
+                val typedChar = text[typedCharIndex]
+                if (typedChar == '\n') {
+                    val textBeforeCursor = text.substring(0, typedCharIndex)
+                    val lastLine = textBeforeCursor.substringAfterLast('\n')
+                    val leadingWhitespace = lastLine.takeWhile { it.isWhitespace() && it != '\n' }
+                    val trimmedLastLine = lastLine.trim()
+                    val extension = currentActive.fileName.substringAfterLast('.', "").lowercase()
+                    
+                    val addExtraIndent = when {
+                        (extension == "py" || currentActive.language.lowercase() == "python") && trimmedLastLine.endsWith(":") -> true
+                        trimmedLastLine.endsWith("{") || trimmedLastLine.endsWith("[") || trimmedLastLine.endsWith("(") -> true
+                        else -> false
                     }
-                    if (leftAngleIndex != -1) {
-                        val tagContent = text.substring(leftAngleIndex + 1, typedCharIndex).trim()
-                        if (tagContent.isNotEmpty() && !tagContent.startsWith("/") && !tagContent.endsWith("/")) {
-                            val tagName = tagContent.split(Regex("\\s+"))[0].filter { it.isLetterOrDigit() }
-                            if (tagName.isNotEmpty()) {
-                                val closeTag = "</$tagName>"
-                                val newText = text.substring(0, typedCharIndex + 1) + closeTag + text.substring(typedCharIndex + 1)
-                                adjustedValue = TextFieldValue(
-                                    text = newText,
-                                    selection = TextRange(typedCharIndex + 1)
-                                )
+                    val extraIndent = if (addExtraIndent) "    " else ""
+                    val autoInsertedText = leadingWhitespace + extraIndent
+                    if (autoInsertedText.isNotEmpty()) {
+                        val newText = text.substring(0, typedCharIndex + 1) + autoInsertedText + text.substring(typedCharIndex + 1)
+                        adjustedValue = TextFieldValue(
+                            text = newText,
+                            selection = TextRange(typedCharIndex + 1 + autoInsertedText.length)
+                        )
+                    }
+                } else if (typedChar == '>') {
+                    val isHtml = currentActive.fileName.lowercase().endsWith(".html") || currentActive.fileName.lowercase().endsWith(".htm")
+                    if (isHtml) {
+                        var leftAngleIndex = -1
+                        for (i in (typedCharIndex - 1) downTo 0) {
+                            if (text[i] == '>') break
+                            if (text[i] == '<') {
+                                leftAngleIndex = i
+                                break
                             }
                         }
+                        if (leftAngleIndex != -1) {
+                            val tagContent = text.substring(leftAngleIndex + 1, typedCharIndex).trim()
+                            if (tagContent.isNotEmpty() && !tagContent.startsWith("/") && !tagContent.endsWith("/")) {
+                                val tagName = tagContent.split(Regex("\\s+"))[0].filter { it.isLetterOrDigit() }
+                                if (tagName.isNotEmpty()) {
+                                    val closeTag = "</$tagName>"
+                                    val newText = text.substring(0, typedCharIndex + 1) + closeTag + text.substring(typedCharIndex + 1)
+                                    adjustedValue = TextFieldValue(
+                                        text = newText,
+                                        selection = TextRange(typedCharIndex + 1)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (autoCloseBrackets) {
+                    val closeChar = when (typedChar) {
+                        '(' -> ')'
+                        '[' -> ']'
+                        '{' -> '}'
+                        '"' -> '"'
+                        '\'' -> '\''
+                        else -> null
+                    }
+                    if (closeChar != null) {
+                        val newText = text.substring(0, typedCharIndex + 1) + closeChar + text.substring(typedCharIndex + 1)
+                        adjustedValue = TextFieldValue(
+                            text = newText,
+                            selection = TextRange(typedCharIndex + 1)
+                        )
                     }
                 }
             }
@@ -1167,12 +1214,15 @@ console.log(area);
         val root = currentDirectory.absolutePath
         val cwd = terminalCwd.absolutePath
         val displayPath = if (cwd == root) {
-            "~/"
+            "~/N"
         } else if (cwd.startsWith(root)) {
-            val relative = cwd.substring(root.length).removePrefix("/")
-            "home/$relative"
+            val currentDirName = terminalCwd.name
+            val firstChar = if (currentDirName.isNotEmpty()) currentDirName[0].lowercaseChar().toString() else ""
+            "~/N/$firstChar"
         } else {
-            cwd
+            val currentDirName = terminalCwd.name
+            val firstChar = if (currentDirName.isNotEmpty()) currentDirName[0].lowercaseChar().toString() else ""
+            "/$firstChar"
         }
         return "$displayPath $ "
     }
@@ -1205,16 +1255,44 @@ console.log(area);
         val lang = activeTab?.language?.lowercase() ?: "python"
         val ext = activeTab?.fileName?.substringAfterLast('.', "")?.lowercase() ?: ""
         
-        val candidates = when {
+        // Context-aware dynamic word suggestions extracted from current open file content
+        val dynamicWords = mutableSetOf<String>()
+        val currentContent = activeTab?.content ?: ""
+        if (currentContent.isNotEmpty()) {
+            val wordRegex = Regex("""[a-zA-Z_][a-zA-Z0-9_]{2,}""")
+            wordRegex.findAll(currentContent).forEach { match ->
+                val matchValue = match.value
+                if (matchValue.lowercase().startsWith(word) && matchValue.lowercase() != word) {
+                    dynamicWords.add(matchValue)
+                }
+            }
+        }
+
+        val staticCandidates = when {
             lang == "python" || ext == "py" -> listOf(
-                "import", "from", "print", "def", "return", "class", "if", "else", "elif", "while", "for", "in", "try", "except", "pass", "True", "False", "None", "self", "as",
+                "import", "from", "print", "def", "return", "class", "if", "else", "elif", "while", "for", "in", "try", "except", "finally", "raise", "pass", "True", "False", "None", "self", "as", "with", "lambda", "assert", "yield", "global", "nonlocal",
                 "flask", "Flask", "app = Flask(__name__)", "route", "app.run(port=5000)", "methods", "jsonify", "request", "render_template", "redirect", "url_for",
                 "pip install", "django", "numpy", "pandas", "requests", "math", "random", "json", "sys", "os"
             )
             lang == "javascript" || lang == "typescript" || ext == "js" || ext == "ts" -> listOf(
-                "const", "let", "var", "function", "return", "class", "if", "else", "while", "for", "import", "export", "from", "default", "try", "catch", "finally", "true", "false", "null", "undefined",
+                "const", "let", "var", "function", "return", "class", "interface", "type", "if", "else", "switch", "case", "while", "for", "import", "export", "from", "default", "try", "catch", "finally", "true", "false", "null", "undefined",
                 "express", "express()", "app.get", "app.post", "app.listen(3000)", "req", "res", "send", "json", "require", "module.exports",
                 "console.log", "document", "window", "setTimeout", "setInterval", "addEventListener", "fetch", "Promise", "async", "await"
+            )
+            lang == "kotlin" || ext == "kt" || ext == "kts" -> listOf(
+                "val", "var", "fun", "class", "interface", "object", "import", "package", "return", "if", "else", "when", "while", "for", "in", "is", "as", "null", "true", "false", "this", "super", "private", "protected", "public", "internal", "override", "companion", "suspend", "coroutineScope", "launch", "async", "delay", "flow", "collect", "mutableStateOf", "remember", "Composable", "Modifier"
+            )
+            lang == "java" -> listOf(
+                "public", "private", "protected", "class", "interface", "enum", "extends", "implements", "import", "package", "return", "if", "else", "switch", "case", "default", "while", "for", "do", "new", "null", "true", "false", "this", "super", "void", "int", "double", "float", "long", "boolean", "char", "String", "System.out.println", "try", "catch", "finally", "throw", "throws"
+            )
+            lang == "cpp" || lang == "c" || ext == "cpp" || ext == "c" || ext == "h" -> listOf(
+                "include", "define", "main", "iostream", "std", "cout", "cin", "endl", "vector", "string", "class", "struct", "public", "private", "protected", "return", "if", "else", "switch", "case", "default", "while", "for", "new", "delete", "nullptr", "true", "false", "this", "void", "int", "double", "float", "bool", "char", "const", "static", "virtual"
+            )
+            lang == "rust" || ext == "rs" -> listOf(
+                "fn", "let", "mut", "struct", "enum", "impl", "trait", "use", "mod", "pub", "return", "if", "else", "match", "while", "for", "in", "loop", "const", "static", "self", "Self", "true", "false", "Option", "Result", "Some", "None", "Ok", "Err", "println!", "vec!", "String", "as"
+            )
+            lang == "go" || ext == "go" -> listOf(
+                "package", "import", "func", "var", "const", "type", "struct", "interface", "return", "if", "else", "switch", "case", "default", "for", "range", "nil", "true", "false", "fmt.Println", "make", "append", "go", "chan", "select", "defer", "map", "string", "int", "float64", "bool"
             )
             lang == "html" || ext == "html" || ext == "htm" -> listOf(
                 "html", "head", "body", "div", "span", "p", "a", "img", "button", "input", "form", "label", "ul", "ol", "li", "table", "tr", "td", "th", "style", "script", "link", "meta", "title",
@@ -1224,12 +1302,16 @@ console.log(area);
                 "margin", "padding", "color", "background-color", "font-size", "font-family", "font-weight", "text-align", "display: flex;", "display: block;", "display: grid;",
                 "justify-content", "align-items", "border", "border-radius", "width", "height", "position", "top", "bottom", "left", "right", "z-index", "box-shadow", "cursor", "transition"
             )
+            lang == "sql" || ext == "sql" -> listOf(
+                "select", "insert", "update", "delete", "from", "where", "join", "left", "right", "inner", "outer", "on", "group by", "order by", "having", "limit", "offset", "create", "table", "index", "drop", "alter", "primary key", "foreign key", "unique", "not null", "null", "and", "or", "not", "in", "exists", "like", "between", "as"
+            )
             else -> listOf(
                 "if", "else", "while", "for", "return", "function", "class", "import", "true", "false"
             )
         }
 
-        return candidates.filter { it.lowercase().startsWith(word) && it.lowercase() != word }
+        val filteredStatic = staticCandidates.filter { it.lowercase().startsWith(word) && it.lowercase() != word }
+        return (dynamicWords + filteredStatic).take(12)
     }
 
     fun selectSuggestion(suggestion: String) {
@@ -1256,6 +1338,135 @@ console.log(area);
                 selection = androidx.compose.ui.text.TextRange(newCursorPos)
             )
         )
+    }
+
+    // ----------------------------------------------------
+    // HIGH-END MONOSPACE FONT MANAGEMENT
+    // ----------------------------------------------------
+    fun getEditorFontFamily(): FontFamily {
+        return when (editorFontName) {
+            "Monospace" -> FontFamily.Monospace
+            "Serif" -> FontFamily.Serif
+            "SansSerif" -> FontFamily.SansSerif
+            "Cursive" -> FontFamily.Cursive
+            else -> FontFamily.Monospace
+        }
+    }
+
+    // ----------------------------------------------------
+    // HIGH-END AUTO CODE BEAUTIFIER & FORMATTER
+    // ----------------------------------------------------
+    fun formatActiveCode() {
+        val tab = activeTab ?: return
+        val code = tab.content
+        val ext = tab.fileName.substringAfterLast('.', "").lowercase()
+        
+        val formatted = when (ext) {
+            "py" -> formatPythonCode(code)
+            "js", "ts", "json" -> formatBraceLanguageCode(code)
+            "html", "xml" -> formatHtmlCode(code)
+            "css" -> formatBraceLanguageCode(code)
+            "kt", "kts", "java", "cpp", "c", "h", "rs", "go" -> formatBraceLanguageCode(code)
+            else -> code
+        }
+        
+        if (formatted != code) {
+            updateEditorTextFieldValue(
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = formatted,
+                    selection = androidx.compose.ui.text.TextRange(0)
+                )
+            )
+            consoleOutput = ">>> Code Formatter auto-beautified ${tab.fileName} successfully!\n$consoleOutput"
+        }
+    }
+
+    private fun formatPythonCode(code: String): String {
+        val lines = code.split("\n")
+        val result = StringBuilder()
+        var indentLevel = 0
+        
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                result.append("\n")
+                continue
+            }
+            
+            if (trimmed.startsWith("elif ") || trimmed.startsWith("else:") || trimmed.startsWith("except ") || trimmed.startsWith("except:") || trimmed.startsWith("finally:")) {
+                val currentIndent = (indentLevel - 1).coerceAtLeast(0)
+                result.append("    ".repeat(currentIndent)).append(trimmed).append("\n")
+                continue
+            }
+            
+            result.append("    ".repeat(indentLevel)).append(trimmed).append("\n")
+            
+            if (trimmed.endsWith(":")) {
+                indentLevel++
+            }
+            
+            if (trimmed.startsWith("return ") || trimmed.startsWith("return") || trimmed.startsWith("pass") || trimmed.startsWith("break") || trimmed.startsWith("continue")) {
+                indentLevel = (indentLevel - 1).coerceAtLeast(0)
+            }
+        }
+        return result.toString().trimEnd() + "\n"
+    }
+
+    private fun formatBraceLanguageCode(code: String): String {
+        val lines = code.split("\n")
+        val result = StringBuilder()
+        var indentLevel = 0
+        
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                result.append("\n")
+                continue
+            }
+            
+            val closingCount = trimmed.count { it == '}' || it == ']' || it == ')' }
+            val openingCount = trimmed.count { it == '{' || it == '[' || it == '(' }
+            
+            if (closingCount > openingCount) {
+                indentLevel = (indentLevel - (closingCount - openingCount)).coerceAtLeast(0)
+            }
+            
+            result.append("    ".repeat(indentLevel)).append(trimmed).append("\n")
+            
+            if (openingCount > closingCount) {
+                indentLevel += (openingCount - closingCount)
+            }
+        }
+        return result.toString().trimEnd() + "\n"
+    }
+
+    private fun formatHtmlCode(code: String): String {
+        val lines = code.split("\n")
+        val result = StringBuilder()
+        var indentLevel = 0
+        
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                result.append("\n")
+                continue
+            }
+            
+            val isClosingTag = trimmed.startsWith("</")
+            val isSelfClosing = trimmed.startsWith("<img") || trimmed.startsWith("<br") || trimmed.startsWith("<hr") || trimmed.startsWith("<meta") || trimmed.startsWith("<link") || trimmed.endsWith("/>")
+            val isOpeningTag = trimmed.startsWith("<") && !trimmed.startsWith("</") && !trimmed.startsWith("<!") && !isSelfClosing
+            
+            if (isClosingTag) {
+                indentLevel = (indentLevel - 1).coerceAtLeast(0)
+            }
+            
+            result.append("    ".repeat(indentLevel)).append(trimmed).append("\n")
+            
+            if (isOpeningTag) {
+                indentLevel++
+            }
+        }
+        return result.toString().trimEnd() + "\n"
     }
 
     // ----------------------------------------------------
@@ -1317,12 +1528,105 @@ console.log(area);
 
     private val installedPipPackages = mutableSetOf<String>()
 
+    fun evaluateMathExpression(expr: String): Double? {
+        val clean = expr.replace(" ", "")
+        if (clean.isEmpty()) return null
+        // Check if it only contains digits, dots, operators +, -, *, /, %, (, )
+        if (!clean.all { it.isDigit() || it == '.' || it == '+' || it == '-' || it == '*' || it == '/' || it == '%' || it == '(' || it == ')' }) {
+            return null
+        }
+        return try {
+            object : Any() {
+                var pos = -1
+                var ch = 0
+
+                fun nextChar() {
+                    ch = if (++pos < clean.length) clean[pos].code else -1
+                }
+
+                fun eat(charToEat: Int): Boolean {
+                    while (ch == ' '.code) nextChar()
+                    if (ch == charToEat) {
+                        nextChar()
+                        return true
+                    }
+                    return false
+                }
+
+                fun parse(): Double {
+                    nextChar()
+                    val x = parseExpression()
+                    if (pos < clean.length) throw RuntimeException("Unexpected: " + ch.toChar())
+                    return x
+                }
+
+                fun parseExpression(): Double {
+                    var x = parseTerm()
+                    while (true) {
+                        if (eat('+'.code)) x += parseTerm() // addition
+                        else if (eat('-'.code)) x -= parseTerm() // subtraction
+                        else return x
+                    }
+                }
+
+                fun parseTerm(): Double {
+                    var x = parseFactor()
+                    while (true) {
+                        if (eat('*'.code)) x *= parseFactor() // multiplication
+                        else if (eat('/'.code)) x /= parseFactor() // division
+                        else if (eat('%'.code)) x %= parseFactor() // modulo
+                        else return x
+                    }
+                }
+
+                fun parseFactor(): Double {
+                    if (eat('+'.code)) return parseFactor() // unary plus
+                    if (eat('-'.code)) return -parseFactor() // unary minus
+
+                    var x: Double
+                    val startPos = pos
+                    if (eat('('.code)) { // parentheses
+                        x = parseExpression()
+                        eat(')'.code)
+                    } else if ((ch >= '0'.code && ch <= '9'.code) || ch == '.'.code) { // numbers
+                        while ((ch >= '0'.code && ch <= '9'.code) || ch == '.'.code) nextChar()
+                        x = clean.substring(startPos, pos).toDouble()
+                    } else {
+                        throw RuntimeException("Unexpected: " + ch.toChar())
+                    }
+
+                    return x
+                }
+            }.parse()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     fun runTerminalCommand(commandLine: String) {
         val trimmed = commandLine.trim()
         if (trimmed.isEmpty()) return
 
         // Append user prompt + command to history
         terminalHistory += "${getTerminalPrompt()}$trimmed\n"
+
+        // Check if the command is a mathematical expression (e.g., 3+5, 12 * 4)
+        val isMathExpression = trimmed.all { it.isDigit() || it == '.' || it == '+' || it == '-' || it == '*' || it == '/' || it == '%' || it == '(' || it == ')' || it.isWhitespace() } &&
+                trimmed.any { it == '+' || it == '-' || it == '*' || it == '/' || it == '%' } &&
+                trimmed.any { it.isDigit() }
+
+        if (isMathExpression) {
+            val result = evaluateMathExpression(trimmed)
+            if (result != null) {
+                val displayResult = if (result % 1.0 == 0.0) {
+                    result.toLong().toString()
+                } else {
+                    result.toString()
+                }
+                terminalHistory += "Result: $displayResult\n\n"
+                return
+            }
+        }
 
         val parts = trimmed.split(Regex("\\s+"))
         val command = parts[0]
@@ -1335,7 +1639,8 @@ console.log(area);
                       clear                Clear terminal screen
                       pwd                  Print current working directory
                       ls                   List files and folders in current directory
-                      cd <dir>             Change working directory
+                      cd <dir>             Change working directory (supports shortcuts & first-letter match)
+                      calc <expr>          Calculate mathematical expression (e.g. 3 + 5)
                       mkdir <dir_name>     Create a new directory
                       rm <file_or_dir>     Delete file or directory (recursively)
                       cat <file_name>      Print file contents
@@ -1349,6 +1654,20 @@ console.log(area);
             }
             "clear" -> {
                 terminalHistory = ""
+            }
+            "calc" -> {
+                val expr = trimmed.substringAfter("calc").trim()
+                if (expr.isEmpty()) {
+                    terminalHistory += "Usage: calc <expression> (e.g., calc 3 + 5)\n\n"
+                } else {
+                    val result = evaluateMathExpression(expr)
+                    if (result != null) {
+                        val displayResult = if (result % 1.0 == 0.0) result.toLong().toString() else result.toString()
+                        terminalHistory += "$expr = $displayResult\n\n"
+                    } else {
+                        terminalHistory += "calc: invalid math expression: $expr\n\n"
+                    }
+                }
             }
             "pwd" -> {
                 terminalHistory += "${terminalCwd.absolutePath}\n\n"
@@ -1374,23 +1693,50 @@ console.log(area);
                 }
             }
             "cd" -> {
+                val rootDir = if (useExternalStorage) {
+                    File(Environment.getExternalStorageDirectory(), "Novacode")
+                } else {
+                    File(getApplication<Application>().filesDir, "Novacode")
+                }
+                if (!rootDir.exists()) rootDir.mkdirs()
+
                 if (parts.size < 2) {
-                    // Go to project home root
-                    val rootDir = if (useExternalStorage) {
-                        File(Environment.getExternalStorageDirectory(), "NovaProjects")
-                    } else {
-                        File(getApplication<Application>().filesDir, "NovaProjects")
-                    }
-                    if (!rootDir.exists()) rootDir.mkdirs()
                     terminalCwd = rootDir
                     terminalHistory += "\n"
                 } else {
-                    val targetPath = parts[1]
-                    val newDir = if (targetPath == "..") {
-                        terminalCwd.parentFile ?: terminalCwd
-                    } else {
-                        val file = File(terminalCwd, targetPath)
-                        if (file.isAbsolute) File(targetPath) else file
+                    val targetPath = trimmed.substringAfter("cd").trim()
+                    val newDir = when {
+                        targetPath == ".." -> {
+                            val parent = terminalCwd.parentFile
+                            if (parent != null && parent.absolutePath.startsWith(rootDir.parentFile?.absolutePath ?: "")) {
+                                parent
+                            } else {
+                                rootDir
+                            }
+                        }
+                        targetPath == "~" || targetPath == "~/N" || targetPath == "Novacode" -> {
+                            rootDir
+                        }
+                        targetPath.startsWith("~/N/") -> {
+                            val sub = targetPath.removePrefix("~/N/")
+                            if (sub.length == 1) {
+                                val match = rootDir.listFiles()?.find { it.isDirectory && it.name.lowercase().startsWith(sub.lowercase()) }
+                                match ?: File(rootDir, sub)
+                            } else {
+                                File(rootDir, sub)
+                            }
+                        }
+                        else -> {
+                            val file = File(terminalCwd, targetPath)
+                            if (file.exists() && file.isDirectory) {
+                                file
+                            } else if (targetPath.length == 1) {
+                                val match = terminalCwd.listFiles()?.find { it.isDirectory && it.name.lowercase().startsWith(targetPath.lowercase()) }
+                                match ?: file
+                            } else {
+                                if (file.isAbsolute) File(targetPath) else file
+                            }
+                        }
                     }
 
                     if (newDir.exists() && newDir.isDirectory) {

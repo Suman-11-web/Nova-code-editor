@@ -67,7 +67,6 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
             Column(
                 modifier = Modifier
                     .background(theme.background)
-                    .statusBarsPadding()
             ) {
                 // Top control bar
                 Row(
@@ -165,6 +164,14 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
                         ) {
                             Icon(imageVector = Icons.Default.SaveAs, contentDescription = "Save As")
+                        }
+                        // Format Code
+                        IconButton(
+                            onClick = { viewModel.formatActiveCode() },
+                            enabled = activeTab != null,
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                        ) {
+                            Icon(imageVector = Icons.Default.AutoFixHigh, contentDescription = "Format Code")
                         }
                         // Run
                         Button(
@@ -338,29 +345,31 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 val codeText = activeTab.content
                 
                 Row(modifier = Modifier.weight(1f)) {
-                    // Line numbers column
-                    val lineCount = codeText.split("\n").size
                     val scrollState = rememberScrollState()
+                    val lineCount = codeText.split("\n").size
 
-                    Column(
-                        modifier = Modifier
-                            .width(42.dp)
-                            .fillMaxHeight()
-                            .background(theme.lineNumbersBackground)
-                            .verticalScroll(scrollState)
-                            .padding(top = 12.dp, bottom = 12.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        for (i in 1..lineCount) {
-                            Text(
-                                text = "$i ",
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = viewModel.fontSize.sp,
-                                    color = theme.lineNumbersText
-                                ),
-                                modifier = Modifier.padding(end = 4.dp)
-                            )
+                    // Line numbers column
+                    if (viewModel.showLineNumbers) {
+                        Column(
+                            modifier = Modifier
+                                .width(42.dp)
+                                .fillMaxHeight()
+                                .background(theme.lineNumbersBackground)
+                                .verticalScroll(scrollState)
+                                .padding(top = 12.dp, bottom = 12.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            for (i in 1..lineCount) {
+                                Text(
+                                    text = "$i ",
+                                    style = TextStyle(
+                                        fontFamily = viewModel.getEditorFontFamily(),
+                                        fontSize = viewModel.fontSize.sp,
+                                        color = theme.lineNumbersText
+                                    ),
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
                         }
                     }
 
@@ -377,7 +386,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             value = viewModel.editorTextFieldValue,
                             onValueChange = { viewModel.updateEditorTextFieldValue(it) },
                             textStyle = TextStyle(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = viewModel.getEditorFontFamily(),
                                 fontSize = viewModel.fontSize.sp,
                                 color = theme.textColor,
                                 lineHeight = (viewModel.fontSize * 1.3).sp
@@ -397,7 +406,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
 
                 // Code Auto-Suggestions Row
                 val suggestions = viewModel.getSuggestionsForCurrentWord()
-                if (suggestions.isNotEmpty()) {
+                if (viewModel.enableAutoComplete && suggestions.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -410,7 +419,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         Text(
                             text = "Suggestions:",
                             style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = viewModel.getEditorFontFamily(),
                                 fontSize = 11.sp,
                                 color = if (theme.isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                                 fontWeight = FontWeight.Bold
@@ -437,7 +446,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 Text(
                                     text = suggestion,
                                     style = TextStyle(
-                                        fontFamily = FontFamily.Monospace,
+                                        fontFamily = viewModel.getEditorFontFamily(),
                                         fontSize = 12.sp,
                                         color = if (theme.isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
                                         fontWeight = FontWeight.Bold

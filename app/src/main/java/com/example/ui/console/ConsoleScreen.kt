@@ -49,6 +49,7 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
         topBar = {
             Column {
                 TopAppBar(
+                    windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
