@@ -127,6 +127,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var isLocalServerRunning by mutableStateOf(false)
     var useExternalStorage by mutableStateOf(false)
     
+    // Interactive Run Input States
+    var isInputRequested by mutableStateOf(false)
+    var inputPromptText by mutableStateOf("")
+    var currentInputCallback by mutableStateOf<((String) -> Unit)?>(null)
+    
+    fun requestUserInput(prompt: String, callback: (String) -> Unit) {
+        inputPromptText = prompt
+        currentInputCallback = callback
+        isInputRequested = true
+    }
+
+    fun submitUserInput(value: String) {
+        val cb = currentInputCallback
+        isInputRequested = false
+        currentInputCallback = null
+        cb?.invoke(value)
+    }
+    
     // Web Preview States
     var showWebPreview by mutableStateOf(false)
     var webPreviewUrl by mutableStateOf("")
@@ -137,6 +155,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val database = NovaDatabase.getDatabase(application)
         repository = NovaRepository(database.novaDao())
+        
+        // Load storage setting from SharedPreferences
+        val prefs = application.getSharedPreferences("nova_editor_prefs", android.content.Context.MODE_PRIVATE)
+        useExternalStorage = prefs.getBoolean("use_external_storage", false)
+        if (useExternalStorage && hasStoragePermission(application)) {
+            currentDirectory = File(Environment.getExternalStorageDirectory(), "Novacode")
+        } else {
+            currentDirectory = File(application.filesDir, "Novacode")
+        }
         
         recentFiles = repository.recentFiles.stateIn(
             scope = viewModelScope,
@@ -388,10 +415,19 @@ console.log(area);
 
     // Storage access configuration
     fun setStorageSource(external: Boolean, context: android.content.Context) {
+        val prefs = getApplication<Application>().getSharedPreferences("nova_editor_prefs", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("use_external_storage", external).apply()
+        
         if (external) {
+            useExternalStorage = true
             if (hasStoragePermission(context)) {
-                useExternalStorage = true
                 currentDirectory = File(Environment.getExternalStorageDirectory(), "Novacode")
+                if (!currentDirectory.exists()) {
+                    currentDirectory.mkdirs()
+                }
+                refreshFileTree()
+            } else {
+                currentDirectory = File(getApplication<Application>().filesDir, "Novacode")
                 if (!currentDirectory.exists()) {
                     currentDirectory.mkdirs()
                 }
@@ -1021,7 +1057,7 @@ console.log(area);
 
         viewModelScope.launch {
             // Simulate processing time
-            kotlinx.coroutines.delay(600)
+            kotlinx.coroutines.delay(200)
 
             val code = tab.content
             val lang = tab.language.lowercase()
@@ -1029,7 +1065,7 @@ console.log(area);
             val outputBuilder = StringBuilder()
             val errorBuilder = StringBuilder()
 
-            outputBuilder.append("Nova Execution Environment (V1.0)\n")
+            outputBuilder.append("Nova Execution Environment (V1.2)\n")
             outputBuilder.append("Executing: ${tab.fileName} via modern dynamic interpreter\n")
             outputBuilder.append("--------------------------------------------------\n\n")
 
@@ -1043,75 +1079,195 @@ console.log(area);
                     val line = lines[index].trim()
                     if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue
 
-                    // Basic variable assignments: e.g., name = "value" or x = 10
+                    // Basic variable assignments: e.g., name = input("enter your name") or x = 10
                     if (line.contains("=") && !line.startsWith("if") && !line.startsWith("for") && !line.startsWith("while")) {
                         val parts = line.split("=", limit = 2)
                         val varName = parts[0].trim()
                         var varValue = parts[1].trim()
 
-                        // Remove quotes for strings
-                        if (varValue.startsWith("\"") && varValue.endsWith("\"")) {
-                            varValue = varValue.substring(1, varValue.length - 1)
-                        } else if (varValue.startsWith("'") && varValue.endsWith("'")) {
-                            varValue = varValue.substring(1, varValue.length - 1)
-                        }
-                        
-                        variables[varName] = varValue
-                    }
-
-                    // Look for print() or console.log() statements
-                    if (line.startsWith("print(") || line.startsWith("console.log(") || line.startsWith("System.out.println(")) {
-                        // Extract content between innermost matching parentheses
-                        val startIdx = line.indexOf("(") + 1
-                        val endIdx = line.lastIndexOf(")")
-                        if (endIdx > startIdx) {
-                            var expr = line.substring(startIdx, endIdx).trim()
-                            
-                            // Check if string literal
-                            if ((expr.startsWith("\"") && expr.endsWith("\"")) || (expr.startsWith("'") && expr.endsWith("'"))) {
-                                outputBuilder.append(expr.substring(1, expr.length - 1)).append("\n")
-                            } else {
-                                // Variable or arithmetic expression evaluation
-                                if (expr.contains("+")) {
-                                    val tokens = expr.split("+")
-                                    val evalSum = StringBuilder()
-                                    var numericSum = 0.0
-                                    var isNumeric = true
-                                    
-                                    for (t in tokens) {
-                                        val token = t.trim()
-                                        val cleanToken = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
-                                            token.substring(1, token.length - 1)
-                                        } else {
-                                            variables[token] ?: token
-                                        }
-
-                                        evalSum.append(cleanToken)
-                                        
-                                        // Attempt numeric tracking
-                                        try {
-                                            numericSum += cleanToken.toDouble()
-                                        } catch (e: NumberFormatException) {
-                                            isNumeric = false
-                                        }
-                                    }
-                                    
-                                    if (isNumeric && tokens.size > 1) {
-                                        outputBuilder.append(numericSum).append("\n")
-                                    } else {
-                                        outputBuilder.append(evalSum.toString()).append("\n")
-                                    }
+                        // Check if it's an interactive input prompt
+                        if (varValue.startsWith("input(") || varValue.startsWith("prompt(")) {
+                            val startP = varValue.indexOf("(") + 1
+                            val endP = varValue.lastIndexOf(")")
+                            var promptStr = ""
+                            if (endP > startP) {
+                                val rawPrompt = varValue.substring(startP, endP).trim()
+                                promptStr = if ((rawPrompt.startsWith("\"") && rawPrompt.endsWith("\"")) || (rawPrompt.startsWith("'") && rawPrompt.endsWith("'"))) {
+                                    rawPrompt.substring(1, rawPrompt.length - 1)
                                 } else {
-                                    // Direct lookup
-                                    val lookup = variables[expr]
-                                    if (lookup != null) {
-                                        outputBuilder.append(lookup).append("\n")
+                                    rawPrompt
+                                }
+                            }
+
+                            // Output the prompt string
+                            outputBuilder.append(promptStr)
+                            consoleOutput = outputBuilder.toString()
+
+                            // Suspend coroutine and wait for user input
+                            val deferred = kotlinx.coroutines.CompletableDeferred<String>()
+                            requestUserInput(promptStr) { result ->
+                                deferred.complete(result)
+                            }
+                            val userInputVal = deferred.await()
+
+                            // Print the entered value so it mimics a real terminal
+                            outputBuilder.append(userInputVal).append("\n")
+                            consoleOutput = outputBuilder.toString()
+
+                            variables[varName] = userInputVal
+                        } else {
+                            // Standard value assignment
+                            if (varValue.startsWith("\"") && varValue.endsWith("\"")) {
+                                varValue = varValue.substring(1, varValue.length - 1)
+                            } else if (varValue.startsWith("'") && varValue.endsWith("'")) {
+                                varValue = varValue.substring(1, varValue.length - 1)
+                            } else {
+                                // Try substituting variables and evaluating mathematically
+                                var mathExpr = varValue
+                                variables.forEach { (k, v) ->
+                                    mathExpr = mathExpr.replace(k, v)
+                                }
+                                val mathResult = evaluateMathExpression(mathExpr)
+                                if (mathResult != null) {
+                                    varValue = if (mathResult % 1.0 == 0.0) mathResult.toLong().toString() else mathResult.toString()
+                                } else {
+                                    // Fallback to simple variable lookup or string concatenation
+                                    if (varValue.contains("+")) {
+                                        val tokens = varValue.split("+")
+                                        val concatBuilder = StringBuilder()
+                                        for (t in tokens) {
+                                            val token = t.trim()
+                                            val cleanToken = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                                token.substring(1, token.length - 1)
+                                            } else {
+                                                variables[token] ?: token
+                                            }
+                                            concatBuilder.append(cleanToken)
+                                        }
+                                        varValue = concatBuilder.toString()
                                     } else {
-                                        // Direct string/number literal print
-                                        outputBuilder.append(expr).append("\n")
+                                        varValue = variables[varValue] ?: varValue
                                     }
                                 }
                             }
+                            variables[varName] = varValue
+                        }
+                    }
+                    // Standalone input prompt: e.g., input("Press any key...")
+                    else if (line.startsWith("input(") || line.startsWith("prompt(")) {
+                        val startP = line.indexOf("(") + 1
+                        val endP = line.lastIndexOf(")")
+                        var promptStr = ""
+                        if (endP > startP) {
+                            val rawPrompt = line.substring(startP, endP).trim()
+                            promptStr = if ((rawPrompt.startsWith("\"") && rawPrompt.endsWith("\"")) || (rawPrompt.startsWith("'") && rawPrompt.endsWith("'"))) {
+                                rawPrompt.substring(1, rawPrompt.length - 1)
+                            } else {
+                                rawPrompt
+                            }
+                        }
+
+                        // Output the prompt
+                        outputBuilder.append(promptStr)
+                        consoleOutput = outputBuilder.toString()
+
+                        // Suspend coroutine and wait for user input
+                        val deferred = kotlinx.coroutines.CompletableDeferred<String>()
+                        requestUserInput(promptStr) { result ->
+                            deferred.complete(result)
+                        }
+                        val userInputVal = deferred.await()
+
+                        outputBuilder.append(userInputVal).append("\n")
+                        consoleOutput = outputBuilder.toString()
+                    }
+                    // Print/Log statements: print(), console.log(), System.out.println()
+                    else if (line.startsWith("print(") || line.startsWith("console.log(") || line.startsWith("System.out.println(")) {
+                        val startIdx = line.indexOf("(") + 1
+                        val endIdx = line.lastIndexOf(")")
+                        if (endIdx > startIdx) {
+                            val expr = line.substring(startIdx, endIdx).trim()
+
+                            // Parse potential comma-separated arguments: print("Value is", x)
+                            val tokens = mutableListOf<String>()
+                            var currentToken = StringBuilder()
+                            var insideSingleQuote = false
+                            var insideDoubleQuote = false
+                            for (char in expr) {
+                                if (char == '\'' && !insideDoubleQuote) {
+                                    insideSingleQuote = !insideSingleQuote
+                                    currentToken.append(char)
+                                } else if (char == '"' && !insideSingleQuote) {
+                                    insideDoubleQuote = !insideDoubleQuote
+                                    currentToken.append(char)
+                                } else if (char == ',' && !insideSingleQuote && !insideDoubleQuote) {
+                                    tokens.add(currentToken.toString().trim())
+                                    currentToken = StringBuilder()
+                                } else {
+                                    currentToken.append(char)
+                                }
+                            }
+                            tokens.add(currentToken.toString().trim())
+
+                            if (tokens.size > 1) {
+                                val printResults = mutableListOf<String>()
+                                for (token in tokens) {
+                                    val cleanToken = if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                        token.substring(1, token.length - 1)
+                                    } else {
+                                        variables[token] ?: token
+                                    }
+                                    printResults.add(cleanToken)
+                                }
+                                outputBuilder.append(printResults.joinToString(" ")).append("\n")
+                            } else {
+                                val token = tokens[0]
+                                if ((token.startsWith("\"") && token.endsWith("\"")) || (token.startsWith("'") && token.endsWith("'"))) {
+                                    outputBuilder.append(token.substring(1, token.length - 1)).append("\n")
+                                } else {
+                                    // Try substituting variables and evaluating mathematically
+                                    var mathExpr = token
+                                    variables.forEach { (k, v) ->
+                                        mathExpr = mathExpr.replace(k, v)
+                                    }
+                                    val mathResult = evaluateMathExpression(mathExpr)
+                                    if (mathResult != null) {
+                                        val displayResult = if (mathResult % 1.0 == 0.0) mathResult.toLong().toString() else mathResult.toString()
+                                        outputBuilder.append(displayResult).append("\n")
+                                    } else {
+                                        // Fallback to simple variable lookup or string concatenation
+                                        if (token.contains("+")) {
+                                            val partsOfSum = token.split("+")
+                                            val sumBuilder = StringBuilder()
+                                            var numericSum = 0.0
+                                            var isNumeric = true
+                                            for (p in partsOfSum) {
+                                                val t = p.trim()
+                                                val cleanToken = if ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("'") && t.endsWith("'"))) {
+                                                    t.substring(1, t.length - 1)
+                                                } else {
+                                                    variables[t] ?: t
+                                                }
+                                                sumBuilder.append(cleanToken)
+                                                try {
+                                                    numericSum += cleanToken.toDouble()
+                                                } catch (e: Exception) {
+                                                    isNumeric = false
+                                                }
+                                            }
+                                            if (isNumeric && partsOfSum.size > 1) {
+                                                val displayResult = if (numericSum % 1.0 == 0.0) numericSum.toLong().toString() else numericSum.toString()
+                                                outputBuilder.append(displayResult).append("\n")
+                                            } else {
+                                                outputBuilder.append(sumBuilder.toString()).append("\n")
+                                            }
+                                        } else {
+                                            outputBuilder.append(variables[token] ?: token).append("\n")
+                                        }
+                                    }
+                                }
+                            }
+                            consoleOutput = outputBuilder.toString()
                         } else {
                             hasSyntaxError = true
                             errorBuilder.append("Syntax Error on Line ${index + 1}: Unclosed parenthesis.\n")
@@ -1119,21 +1275,13 @@ console.log(area);
                             break
                         }
                     }
-
-                    // Check brackets matching
-                    val openBracketsCount = line.count { it == '{' || it == '(' || it == '[' }
-                    val closeBracketsCount = line.count { it == '}' || it == ')' || it == ']' }
-                    if (openBracketsCount != closeBracketsCount && !line.startsWith("print") && !line.startsWith("console") && !line.startsWith("System.out")) {
-                        // Soft warning, don't crash but alert
-                    }
                 }
 
-                // If nothing was parsed but the code contains functions or tags, run secondary dynamic simulators
+                // Fallback rendering/simulations if output is completely empty (e.g. metadata files)
                 if (outputBuilder.length < 150) {
                     if (lang == "html") {
                         outputBuilder.append("Rendering HTML Page Content...\n")
                         outputBuilder.append("--------------------------------------------------\n")
-                        // Extract content
                         val titleRegex = "<title>(.*?)</title>".toRegex()
                         val h1Regex = "<h1>(.*?)</h1>".toRegex()
                         val pRegex = "<p>(.*?)</p>".toRegex()
@@ -1169,7 +1317,6 @@ console.log(area);
                             }
                         }
                     } else if (!hasSyntaxError) {
-                        // Standard fallback simulation for languages without basic print statements
                         outputBuilder.append("[Build Logs]\n")
                         outputBuilder.append("Targeting architecture: native_android_64bit\n")
                         outputBuilder.append("Linker tasks executing: standard_nova_build\n")

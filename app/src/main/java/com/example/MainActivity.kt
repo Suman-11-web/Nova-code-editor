@@ -310,6 +310,8 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
     ) { innerPadding ->
         val screenModifier = Modifier
             .padding(bottom = innerPadding.calculateBottomPadding())
+            .statusBarsPadding()
+            .padding(top = 10.dp)
             
         when (currentScreen) {
             Screen.EDITOR -> EditorScreen(viewModel = viewModel, modifier = screenModifier)

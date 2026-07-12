@@ -1,5 +1,6 @@
 package com.example.ui.console
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -219,6 +220,64 @@ fun ConsoleScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                         lineHeight = 18.sp
                                     )
                                 )
+                            }
+                        }
+                    }
+
+                    // Interactive suspended input box
+                    if (viewModel.isInputRequested) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                var userInputState by remember { mutableStateOf("") }
+                                Text(
+                                    text = viewModel.inputPromptText.ifEmpty { "Input:" },
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                                OutlinedTextField(
+                                    value = userInputState,
+                                    onValueChange = { userInputState = it },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp),
+                                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = Color.White),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = Color.Gray,
+                                        focusedContainerColor = Color(0xFF0F172A),
+                                        unfocusedContainerColor = Color(0xFF0F172A)
+                                    ),
+                                    singleLine = true,
+                                    placeholder = { Text("Enter value...", fontSize = 12.sp, color = Color.LightGray) },
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = {
+                                        if (userInputState.isNotEmpty()) {
+                                            viewModel.submitUserInput(userInputState)
+                                        }
+                                    })
+                                )
+                                Button(
+                                    onClick = {
+                                        viewModel.submitUserInput(userInputState)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(36.dp)
+                                ) {
+                                    Text("Submit", fontSize = 12.sp)
+                                }
                             }
                         }
                     }
