@@ -349,11 +349,14 @@ console.log(area);
         currentScreen = screen
     }
 
-    fun startLocalServer() {
-        if (isLocalServerRunning) return
+    fun startLocalServer(preferredPort: Int = localServerPort) {
+        if (isLocalServerRunning && localServerPort == preferredPort) return
+        if (isLocalServerRunning) {
+            stopLocalServer()
+        }
         try {
             val socket = try {
-                java.net.ServerSocket(8080, 50, java.net.InetAddress.getByName("127.0.0.1"))
+                java.net.ServerSocket(preferredPort, 50, java.net.InetAddress.getByName("127.0.0.1"))
             } catch (e: Exception) {
                 java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1"))
             }
@@ -394,26 +397,85 @@ console.log(area);
                     // Check if hosting a Python (Flask) or Node.js (Express) backend server
                     if (activeHostedServerPort != null) {
                         val cleanPath = path.substringBefore("?").removePrefix("/")
-                        val lookups = listOf(cleanPath, "/$cleanPath", cleanPath.removeSuffix("index.html").removeSuffix("/"))
+                        val lookups = listOf(
+                            cleanPath, 
+                            "/$cleanPath", 
+                            cleanPath.removeSuffix("index.html").removeSuffix("/"),
+                            cleanPath.removeSuffix("index.html")
+                        )
                         var responseText: String? = null
                         for (key in lookups) {
-                            if (hostedServerRoutes.containsKey(key)) {
-                                responseText = hostedServerRoutes[key]
+                            val cleanKey = if (key.endsWith("/")) key.dropLast(1) else key
+                            if (hostedServerRoutes.containsKey(cleanKey)) {
+                                responseText = hostedServerRoutes[cleanKey]
                                 break
                             }
                         }
-                        if (responseText == null) {
-                            responseText = hostedServerRoutes[""] ?: "<h3>Nova Backend Live Server</h3><p>Server <b>$activeHostedServerName</b> running on port $activeHostedServerPort.</p>"
+                        
+                        if (responseText != null) {
+                            val bytes = responseText.toByteArray()
+                            val outputStream = clientSocket.getOutputStream()
+                            outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                            outputStream.write("Content-Type: text/html\r\n".toByteArray())
+                            outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
+                            outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                            outputStream.write(bytes)
+                            outputStream.flush()
+                            return@thread
                         }
-                        val bytes = responseText.toByteArray()
-                        val outputStream = clientSocket.getOutputStream()
-                        outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
-                        outputStream.write("Content-Type: text/html\r\n".toByteArray())
-                        outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
-                        outputStream.write("Connection: close\r\n\r\n".toByteArray())
-                        outputStream.write(bytes)
-                        outputStream.flush()
-                        return@thread
+
+                        // Static fallback for active backend servers (e.g. static/style.css, index.html)
+                        var staticFile = File(currentDirectory, path)
+                        if (!staticFile.exists() || !staticFile.isFile) {
+                            staticFile = File(File(currentDirectory, "static"), path)
+                        }
+                        if (!staticFile.exists() || !staticFile.isFile) {
+                            staticFile = File(File(currentDirectory, "public"), path)
+                        }
+                        if (!staticFile.exists() || !staticFile.isFile) {
+                            staticFile = File(File(currentDirectory, "templates"), path)
+                        }
+
+                        if (staticFile.exists() && staticFile.isFile) {
+                            val bytes = try {
+                                staticFile.readBytes()
+                            } catch (e: Exception) {
+                                ByteArray(0)
+                            }
+                            val mimeType = when (staticFile.extension.lowercase()) {
+                                "html", "htm" -> "text/html"
+                                "css" -> "text/css"
+                                "js" -> "application/javascript"
+                                "json" -> "application/json"
+                                "png" -> "image/png"
+                                "jpg", "jpeg" -> "image/jpeg"
+                                "gif" -> "image/gif"
+                                "svg" -> "image/svg+xml"
+                                else -> "text/plain"
+                            }
+                            val outputStream = clientSocket.getOutputStream()
+                            outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                            outputStream.write("Content-Type: $mimeType\r\n".toByteArray())
+                            outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
+                            outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                            outputStream.write(bytes)
+                            outputStream.flush()
+                            return@thread
+                        }
+                        
+                        // Default index return
+                        val defaultIndex = hostedServerRoutes[""] ?: hostedServerRoutes["/"]
+                        if (defaultIndex != null) {
+                            val bytes = defaultIndex.toByteArray()
+                            val outputStream = clientSocket.getOutputStream()
+                            outputStream.write("HTTP/1.1 200 OK\r\n".toByteArray())
+                            outputStream.write("Content-Type: text/html\r\n".toByteArray())
+                            outputStream.write("Content-Length: ${bytes.size}\r\n".toByteArray())
+                            outputStream.write("Connection: close\r\n\r\n".toByteArray())
+                            outputStream.write(bytes)
+                            outputStream.flush()
+                            return@thread
+                        }
                     }
 
                     var file = File(currentDirectory, path)
@@ -1143,10 +1205,8 @@ console.log(area);
                 return
             }
             parseAndHostBackend(code, "python")
-            if (!isLocalServerRunning) {
-                startLocalServer()
-            }
             val port = activeHostedServerPort ?: 5000
+            startLocalServer(port)
             consoleOutput = ">>> Running ${tab.fileName}...\n* Serving Flask app '${tab.fileName.substringBeforeLast(".")}'\n* Debug mode: on\n* Running on http://127.0.0.1:$port/ (Press CTRL+C to quit)\n* Serving dynamic background endpoints successfully!"
             consoleError = ""
             webPreviewUrl = "http://127.0.0.1:$localServerPort/"
@@ -1164,10 +1224,8 @@ console.log(area);
                 return
             }
             parseAndHostBackend(code, "javascript")
-            if (!isLocalServerRunning) {
-                startLocalServer()
-            }
             val port = activeHostedServerPort ?: 3000
+            startLocalServer(port)
             consoleOutput = ">>> Running ${tab.fileName}...\n[nodemon] starting `node ${tab.fileName}`\nServer running at http://127.0.0.1:$port/\nExpress routing table active on background live host!"
             consoleError = ""
             webPreviewUrl = "http://127.0.0.1:$localServerPort/"
@@ -1181,10 +1239,9 @@ console.log(area);
             // Force save current state first
             saveCurrentFile()
             
-            // Ensure local server is running
-            if (!isLocalServerRunning) {
-                startLocalServer()
-            }
+            // Ensure local server is running on preferred live server port (5500) or current localServerPort
+            val targetPort = if (localServerPort == 8080) 5500 else localServerPort
+            startLocalServer(targetPort)
             
             // Open local WebView preview!
             val fileName = tab.fileName
@@ -1883,13 +1940,66 @@ console.log(area);
             }
             activeHostedServerPort = port
             
-            // Regex to match python flask route decorators and function return values
-            val routeRegex = Regex("""@app\.route\(\s*["']([^"']+)["'].*?\)[\s\S]*?def\s+\w+\(\s*\):[\s\S]*?return\s+["']([^"']+)["']""")
-            val matches = routeRegex.findAll(content)
-            for (match in matches) {
-                val path = match.groupValues[1].removePrefix("/")
-                val response = match.groupValues[2]
-                hostedServerRoutes[path] = response
+            // Advanced line-by-line route parser for Python Flask
+            val lines = content.split("\n")
+            var i = 0
+            while (i < lines.size) {
+                val line = lines[i].trim()
+                if (line.startsWith("@app.route(") || line.startsWith("@app.get(") || line.startsWith("@app.post(")) {
+                    val routePath = Regex("""@app\.(route|get|post)\(\s*["']([^"']+)["']""").find(line)?.groupValues?.get(2) ?: ""
+                    if (routePath.isNotEmpty()) {
+                        // Find the return statement in the subsequent lines (up to 20 lines)
+                        var returnStr = ""
+                        var j = i + 1
+                        while (j < lines.size && j < i + 20) {
+                            val nextLine = lines[j].trim()
+                            // If we hit another route or decorator, we've moved past this route handler
+                            if (nextLine.startsWith("@app.route") || nextLine.startsWith("@app.get") || nextLine.startsWith("@app.post") || (nextLine.startsWith("def ") && j > i + 2)) {
+                                break
+                            }
+                            if (nextLine.startsWith("return ")) {
+                                returnStr = nextLine.removePrefix("return ").trim()
+                                break
+                            }
+                            j++
+                        }
+                        if (returnStr.isNotEmpty()) {
+                            val cleanPath = routePath.removePrefix("/")
+                            val renderTemplateRegex = Regex("""render_template\(\s*["']([^"']+)["']""")
+                            val renderMatch = renderTemplateRegex.find(returnStr)
+                            if (renderMatch != null) {
+                                val templateName = renderMatch.groupValues[1]
+                                // Look in 'templates' subfolder, then in 'currentDirectory'
+                                val templatesDir = File(currentDirectory, "templates")
+                                val templateFile = File(templatesDir, templateName).takeIf { it.exists() }
+                                    ?: File(currentDirectory, templateName).takeIf { it.exists() }
+                                
+                                val fileContent = if (templateFile != null && templateFile.exists()) {
+                                    try {
+                                        templateFile.readText()
+                                    } catch (e: Exception) {
+                                        "<h3>Error reading template $templateName</h3><p>${e.message}</p>"
+                                    }
+                                } else {
+                                    "<h3>Template Not Found: \"$templateName\"</h3><p>Make sure the file exists in the <b>templates/</b> directory or the root project folder.</p>"
+                                }
+                                hostedServerRoutes[cleanPath] = fileContent
+                                if (cleanPath == "") {
+                                    hostedServerRoutes["index.html"] = fileContent
+                                }
+                            } else {
+                                // Direct string return, let's strip enclosing single or double quotes
+                                val cleanString = if ((returnStr.startsWith("\"") && returnStr.endsWith("\"")) || (returnStr.startsWith("'") && returnStr.endsWith("'"))) {
+                                    returnStr.substring(1, returnStr.length - 1)
+                                } else {
+                                    returnStr
+                                }
+                                hostedServerRoutes[cleanPath] = cleanString
+                            }
+                        }
+                    }
+                }
+                i++
             }
             
             if (!hostedServerRoutes.containsKey("")) {
@@ -1904,13 +2014,65 @@ console.log(area);
             }
             activeHostedServerPort = port
             
-            // Regex to match express route handlers and responses
-            val routeRegex = Regex("""app\.(get|post|use)\(\s*["']([^"']+)["'].*?res\.send\(\s*["']([^"']+)["']""")
-            val matches = routeRegex.findAll(content)
-            for (match in matches) {
-                val path = match.groupValues[2].removePrefix("/")
-                val response = match.groupValues[3]
-                hostedServerRoutes[path] = response
+            // Advanced line-by-line route parser for Express.js
+            val lines = content.split("\n")
+            var i = 0
+            while (i < lines.size) {
+                val line = lines[i].trim()
+                if (line.startsWith("app.get(") || line.startsWith("app.use(") || line.startsWith("app.post(")) {
+                    val routePath = Regex("""app\.(get|use|post)\(\s*["']([^"']+)["']""").find(line)?.groupValues?.get(2) ?: ""
+                    if (routePath.isNotEmpty()) {
+                        var responseStr = ""
+                        var j = i
+                        while (j < lines.size && j < i + 20) {
+                            val nextLine = lines[j].trim()
+                            if (nextLine.contains("res.send(") || nextLine.contains("res.sendFile(") || nextLine.contains("res.render(")) {
+                                responseStr = nextLine
+                                break
+                            }
+                            j++
+                        }
+                        if (responseStr.isNotEmpty()) {
+                            val cleanPath = routePath.removePrefix("/")
+                            if (responseStr.contains("res.send(")) {
+                                val sendMatch = Regex("""res\.send\(\s*["']([\s\S]*?)["']\s*\)""").find(responseStr)
+                                    ?: Regex("""res\.send\(\s*(.*?)\s*\)""").find(responseStr)
+                                val body = sendMatch?.groupValues?.get(1)?.trim('\'', '"') ?: "Hello from Express"
+                                hostedServerRoutes[cleanPath] = body
+                            } else if (responseStr.contains("res.sendFile(")) {
+                                val sendFileMatch = Regex("""res\.sendFile\([\s\S]*?["']([^"']+)["']""").find(responseStr)
+                                val filename = sendFileMatch?.groupValues?.get(1) ?: "index.html"
+                                val file = File(currentDirectory, filename).takeIf { it.exists() }
+                                    ?: File(File(currentDirectory, "public"), filename).takeIf { it.exists() }
+                                val fileContent = if (file != null && file.exists()) {
+                                    try { file.readText() } catch (e: Exception) { "Error: ${e.message}" }
+                                } else {
+                                    "<h3>File Not Found: $filename</h3>"
+                                }
+                                hostedServerRoutes[cleanPath] = fileContent
+                                if (cleanPath == "") {
+                                    hostedServerRoutes["index.html"] = fileContent
+                                }
+                            } else if (responseStr.contains("res.render(")) {
+                                val renderMatch = Regex("""res\.render\(\s*["']([^"']+)["']""").find(responseStr)
+                                val viewName = renderMatch?.groupValues?.get(1) ?: "index"
+                                val viewFilename = if (viewName.contains(".")) viewName else "$viewName.html"
+                                val file = File(File(currentDirectory, "views"), viewFilename).takeIf { it.exists() }
+                                    ?: File(currentDirectory, viewFilename).takeIf { it.exists() }
+                                val fileContent = if (file != null && file.exists()) {
+                                    try { file.readText() } catch (e: Exception) { "Error: ${e.message}" }
+                                } else {
+                                    "<h3>View Not Found: $viewFilename</h3>"
+                                }
+                                hostedServerRoutes[cleanPath] = fileContent
+                                if (cleanPath == "") {
+                                    hostedServerRoutes["index.html"] = fileContent
+                                }
+                            }
+                        }
+                    }
+                }
+                i++
             }
             
             if (!hostedServerRoutes.containsKey("")) {
@@ -2365,10 +2527,8 @@ console.log(area);
                 return
             }
             parseAndHostBackend(code, "python")
-            if (!isLocalServerRunning) {
-                startLocalServer()
-            }
             val port = activeHostedServerPort ?: 5000
+            startLocalServer(port)
             terminalHistory += "* Serving Flask app 'app'\n* Debug mode: on\n* Running on http://127.0.0.1:$port/ (Press CTRL+C to quit)\n* Serving dynamic background endpoints successfully!\n\n"
             webPreviewUrl = "http://127.0.0.1:$localServerPort/"
             showWebPreview = true
@@ -2443,10 +2603,8 @@ console.log(area);
                 return
             }
             parseAndHostBackend(code, "javascript")
-            if (!isLocalServerRunning) {
-                startLocalServer()
-            }
             val port = activeHostedServerPort ?: 3000
+            startLocalServer(port)
             terminalHistory += "[nodemon] starting `node $name`\nServer running at http://127.0.0.1:$port/\nExpress routing table active on background live host!\n\n"
             webPreviewUrl = "http://127.0.0.1:$localServerPort/"
             showWebPreview = true

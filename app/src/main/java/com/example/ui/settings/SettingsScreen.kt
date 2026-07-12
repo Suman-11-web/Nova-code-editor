@@ -474,6 +474,44 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 )
                             }
                         }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), thickness = 0.5.dp)
+
+                        // Port Selection Row
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "Preferred Server Port",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            Text(
+                                text = "Select port for web server and backend routing:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf(5000, 5500, 8000, 8080).forEach { port ->
+                                    val isSelected = viewModel.localServerPort == port
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            viewModel.localServerPort = port
+                                            if (viewModel.isLocalServerRunning) {
+                                                viewModel.stopLocalServer()
+                                                viewModel.startLocalServer(port)
+                                            }
+                                        },
+                                        label = { Text("$port", fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

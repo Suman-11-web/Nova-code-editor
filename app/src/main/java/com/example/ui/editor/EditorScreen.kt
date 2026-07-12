@@ -498,9 +498,9 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             }
                         }
 
-                        // Add Draft Button
+                        // Add New File Button (Prompts for filename and extension)
                         IconButton(
-                            onClick = { viewModel.createNewDraftTab() },
+                            onClick = { showHomeNewFileDialog = true },
                             modifier = Modifier
                                 .padding(horizontal = 6.dp)
                                 .size(32.dp)
