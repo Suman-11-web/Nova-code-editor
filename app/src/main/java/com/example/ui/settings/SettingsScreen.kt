@@ -3,8 +3,10 @@ package com.example.ui.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -90,34 +92,63 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         Spacer(modifier = Modifier.height(10.dp))
                         
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             EditorTheme.values().forEach { theme ->
                                 val isSelected = currentTheme == theme
                                 
                                 Box(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .width(135.dp)
+                                        .height(76.dp)
+                                        .clip(RoundedCornerShape(12.dp))
                                         .background(theme.background)
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) theme.cursorColor else Color.Gray.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
                                         .clickable { viewModel.editorTheme = theme }
-                                        .padding(vertical = 12.dp),
+                                        .padding(8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
                                         Text(
-                                            text = theme.displayName.split(" ")[0],
+                                            text = theme.displayName,
                                             color = theme.textColor,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 2
                                         )
-                                        if (isSelected) {
+                                        
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .padding(top = 4.dp)
                                                     .size(6.dp)
-                                                    .background(theme.cursorColor, RoundedCornerShape(3.dp))
+                                                    .background(theme.keywordColor, CircleShape)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(theme.stringColor, CircleShape)
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(theme.functionColor, CircleShape)
                                             )
                                         }
                                     }
