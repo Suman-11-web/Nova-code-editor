@@ -1,9 +1,11 @@
 package com.example.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -524,6 +526,70 @@ fun SettingsScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             textAlign = TextAlign.Center,
                             lineHeight = 20.sp
                         )
+                    }
+                }
+            }
+            
+            item {
+                val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                try {
+                                    uriHandler.openUri("https://instagram.com/__suman._.007")
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Powered by Suman",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Medium
+                        )
+                        // Simple beautifully styled Instagram Icon
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .border(
+                                    width = 1.8.dp,
+                                    color = Color(0xFFE1306C), // Instagram Pink/Red brand color
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .padding(3.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Inner circle
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize(0.65f)
+                                    .border(
+                                        width = 1.8.dp,
+                                        color = Color(0xFFE1306C),
+                                        shape = CircleShape
+                                    )
+                            )
+                            // Top-right dot
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 1.dp, end = 1.dp)
+                                    .size(3.dp)
+                                    .background(Color(0xFFE1306C), CircleShape)
+                            )
+                        }
                     }
                 }
             }

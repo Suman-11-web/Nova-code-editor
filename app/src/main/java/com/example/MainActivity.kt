@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
     val currentScreen = viewModel.currentScreen
@@ -285,50 +286,54 @@ fun MainAppScaffold(viewModel: AppViewModel = viewModel()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            Column {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.testTag("bottom_nav_bar")
-                ) {
-                    // Navigation item: Editor
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.EDITOR,
-                        onClick = { viewModel.navigateTo(Screen.EDITOR) },
-                        icon = { Icon(Icons.Default.Code, contentDescription = "Editor") },
-                        label = { Text("Editor") },
-                        modifier = Modifier.testTag("nav_editor_tab")
-                    )
-                    // Navigation item: File Explorer
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.EXPLORER,
-                        onClick = { viewModel.navigateTo(Screen.EXPLORER) },
-                        icon = { Icon(Icons.Default.Folder, contentDescription = "Files") },
-                        label = { Text("Explorer") },
-                        modifier = Modifier.testTag("nav_explorer_tab")
-                    )
-                    // Navigation item: Console
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.CONSOLE,
-                        onClick = { viewModel.navigateTo(Screen.CONSOLE) },
-                        icon = { Icon(Icons.Default.Terminal, contentDescription = "Console") },
-                        label = { Text("Console") },
-                        modifier = Modifier.testTag("nav_console_tab")
-                    )
-                    // Navigation item: Settings
-                    NavigationBarItem(
-                        selected = currentScreen == Screen.SETTINGS,
-                        onClick = { viewModel.navigateTo(Screen.SETTINGS) },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                        label = { Text("Settings") },
-                        modifier = Modifier.testTag("nav_settings_tab")
-                    )
+            if (!WindowInsets.isImeVisible) {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.testTag("bottom_nav_bar")
+                    ) {
+                        // Navigation item: Editor
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.EDITOR,
+                            onClick = { viewModel.navigateTo(Screen.EDITOR) },
+                            icon = { Icon(Icons.Default.Code, contentDescription = "Editor") },
+                            label = { Text("Editor") },
+                            modifier = Modifier.testTag("nav_editor_tab")
+                        )
+                        // Navigation item: File Explorer
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.EXPLORER,
+                            onClick = { viewModel.navigateTo(Screen.EXPLORER) },
+                            icon = { Icon(Icons.Default.Folder, contentDescription = "Files") },
+                            label = { Text("Explorer") },
+                            modifier = Modifier.testTag("nav_explorer_tab")
+                        )
+                        // Navigation item: Console
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.CONSOLE,
+                            onClick = { viewModel.navigateTo(Screen.CONSOLE) },
+                            icon = { Icon(Icons.Default.Terminal, contentDescription = "Console") },
+                            label = { Text("Console") },
+                            modifier = Modifier.testTag("nav_console_tab")
+                        )
+                        // Navigation item: Settings
+                        NavigationBarItem(
+                            selected = currentScreen == Screen.SETTINGS,
+                            onClick = { viewModel.navigateTo(Screen.SETTINGS) },
+                            icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                            label = { Text("Settings") },
+                            modifier = Modifier.testTag("nav_settings_tab")
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
+        val isKeyboardVisible = WindowInsets.isImeVisible
+        val bottomPadding = if (isKeyboardVisible) 0.dp else innerPadding.calculateBottomPadding()
         val screenModifier = Modifier
-            .padding(bottom = innerPadding.calculateBottomPadding())
+            .padding(bottom = bottomPadding)
             .statusBarsPadding()
             .padding(top = 10.dp)
             

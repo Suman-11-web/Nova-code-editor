@@ -1605,6 +1605,24 @@ console.log(area);
         return "$displayPath $ "
     }
 
+    fun getFormattedCwdPath(): String {
+        val path = terminalCwd.absolutePath
+        val targetSubDir = if (path.contains("/files/Novacode")) {
+            path.substringAfter("/files/Novacode")
+        } else if (path.contains("/files")) {
+            path.substringAfter("/files")
+        } else if (path.contains("/Novacode")) {
+            path.substringAfter("/Novacode")
+        } else {
+            ""
+        }
+        return if (targetSubDir.isNotEmpty()) {
+            "/storage/emulated/0/Novacode$targetSubDir"
+        } else {
+            "/storage/emulated/0/Novacode"
+        }
+    }
+
     // ----------------------------------------------------
     // AUTO SUGGESTION / AUTOCOMPLETE SYSTEM
     // ----------------------------------------------------
@@ -2109,7 +2127,7 @@ console.log(area);
                 }
             }
             "pwd" -> {
-                terminalHistory += "${terminalCwd.absolutePath}\n\n"
+                terminalHistory += "${getFormattedCwdPath()}\n\n"
             }
             "ls" -> {
                 try {

@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
@@ -139,87 +140,13 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Undo
-                        IconButton(
-                            onClick = { viewModel.undo() },
-                            enabled = viewModel.canUndo(),
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.Undo, contentDescription = "Undo")
-                        }
-                        // Redo
-                        IconButton(
-                            onClick = { viewModel.redo() },
-                            enabled = viewModel.canRedo(),
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.Redo, contentDescription = "Redo")
-                        }
-                        // Search
-                        IconButton(
-                            onClick = { viewModel.isSearchActive = !viewModel.isSearchActive },
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.Search, contentDescription = "Search & Replace")
-                        }
-                        // Multi-Theme Selector (Premium)
-                        IconButton(
-                            onClick = { showThemeSelectorDialog = true },
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.Palette, contentDescription = "Editor Themes", tint = Color(0xFFFFB86C))
-                        }
-                        // Split-Screen Editor Toggler (Premium)
-                        IconButton(
-                            onClick = {
-                                if (activeTab != null) {
-                                    if (viewModel.isSplitScreenEnabled) {
-                                        viewModel.isSplitScreenEnabled = false
-                                    } else {
-                                        viewModel.isSplitScreenEnabled = true
-                                        viewModel.activeLeftTabId = activeTab.id
-                                        viewModel.activeRightTabId = openTabs.find { it.id != activeTab.id }?.id ?: activeTab.id
-                                        viewModel.selectedPane = 0
-                                    }
-                                }
-                            },
-                            enabled = activeTab != null,
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Splitscreen,
-                                contentDescription = "Split Screen",
-                                tint = if (viewModel.isSplitScreenEnabled) Color(0xFF50FA7B) else theme.textColor
-                            )
-                        }
-                        // Local Git-Style Version snapshots (Premium)
-                        IconButton(
-                            onClick = {
-                                if (activeTab != null) {
-                                    viewModel.loadVersionHistoryForActiveFile()
-                                    selectedSnapshotForDiff = null
-                                    showVersionHistoryDialog = true
-                                }
-                            },
-                            enabled = activeTab != null,
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.History, contentDescription = "Version History", tint = Color(0xFFBD93F9))
-                        }
-                        // Quick Action Developer Shortcut (Premium)
-                        IconButton(
-                            onClick = { showQuickActionDialog = true },
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
-                        ) {
-                            Icon(imageVector = Icons.Default.FlashOn, contentDescription = "Developer Shortcuts", tint = Color(0xFFF1FA8C))
-                        }
                         // Save
                         IconButton(
                             onClick = { viewModel.saveCurrentFile() },
                             enabled = activeTab != null,
                             colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
                         ) {
-                            Icon(imageVector = Icons.Default.Save, contentDescription = "Save File")
+                            Icon(imageVector = Icons.Default.Save, contentDescription = "Save File", tint = Color(0xFF50FA7B))
                         }
                         // Save As
                         IconButton(
@@ -232,36 +159,272 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                             enabled = activeTab != null,
                             colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
                         ) {
-                            Icon(imageVector = Icons.Default.SaveAs, contentDescription = "Save As")
+                            Icon(imageVector = Icons.Default.SaveAs, contentDescription = "Save As", tint = Color(0xFF8BE9FD))
                         }
-                        // Format Code
+                        // Run (replacing Theme button)
                         IconButton(
-                            onClick = { viewModel.formatActiveCode() },
+                            onClick = { viewModel.runActiveCode() },
                             enabled = activeTab != null,
                             colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
                         ) {
-                            Icon(imageVector = Icons.Default.AutoFixHigh, contentDescription = "Format Code")
+                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Run", tint = Color(0xFF50FA7B))
                         }
-                        // Run
-                        Button(
-                            onClick = { viewModel.runActiveCode() },
-                            enabled = activeTab != null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            modifier = Modifier
-                                .height(36.dp)
-                                .testTag("run_code_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Run",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Run", fontSize = 13.sp)
+                        
+                        // 3-Lines Options Menu (Hamburger Menu)
+                        Box {
+                            var showMoreMenu by remember { mutableStateOf(false) }
+                            IconButton(
+                                onClick = { showMoreMenu = true },
+                                colors = IconButtonDefaults.iconButtonColors(contentColor = theme.textColor)
+                            ) {
+                                Icon(imageVector = Icons.Default.Menu, contentDescription = "More Options", tint = Color(0xFFFFB86C))
+                            }
+                            
+                            DropdownMenu(
+                                expanded = showMoreMenu,
+                                onDismissRequest = { showMoreMenu = false },
+                                modifier = Modifier
+                                    .width(260.dp)
+                                    .background(if (theme.isDark) Color(0xFF1E1F29) else Color(0xFFF8FAFC))
+                            ) {
+                                // Section Title: Edit Actions
+                                Text(
+                                    text = "EDIT ACTIONS",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (theme.isDark) Color(0xFF6272A4) else Color.Gray,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                )
+                                
+                                // Undo
+                                DropdownMenuItem(
+                                    text = { Text("Undo", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.undo()
+                                    },
+                                    enabled = viewModel.canUndo(),
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Undo,
+                                            contentDescription = "Undo",
+                                            tint = if (viewModel.canUndo()) Color(0xFFBD93F9) else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Redo
+                                DropdownMenuItem(
+                                    text = { Text("Redo", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.redo()
+                                    },
+                                    enabled = viewModel.canRedo(),
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Redo,
+                                            contentDescription = "Redo",
+                                            tint = if (viewModel.canRedo()) Color(0xFF8BE9FD) else Color.Gray,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Format Code
+                                DropdownMenuItem(
+                                    text = { Text("Format Code", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.formatActiveCode()
+                                    },
+                                    enabled = activeTab != null,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoFixHigh,
+                                            contentDescription = "Format Code",
+                                            tint = Color(0xFF50FA7B),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Clear Active Code (Premium feature)
+                                DropdownMenuItem(
+                                    text = { Text("Clear Active Code", color = Color(0xFFFF5555), fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (activeTab != null) {
+                                            viewModel.updateEditorTextFieldValue(androidx.compose.ui.text.input.TextFieldValue(""))
+                                        }
+                                    },
+                                    enabled = activeTab != null,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.DeleteSweep,
+                                            contentDescription = "Clear Active Code",
+                                            tint = Color(0xFFFF5555),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                HorizontalDivider(color = if (theme.isDark) Color(0xFF44475A) else Color(0xFFE2E8F0))
+                                
+                                // Section Title: ADVANCED & PREMIUM
+                                Text(
+                                    text = "ADVANCED & PREMIUM",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (theme.isDark) Color(0xFF6272A4) else Color.Gray,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                )
+                                
+                                // Split-Screen (Multi-Window)
+                                DropdownMenuItem(
+                                    text = { Text("Split Screen (Multi-Window)", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (activeTab != null) {
+                                            if (viewModel.isSplitScreenEnabled) {
+                                                viewModel.isSplitScreenEnabled = false
+                                            } else {
+                                                viewModel.isSplitScreenEnabled = true
+                                                viewModel.activeLeftTabId = activeTab.id
+                                                viewModel.activeRightTabId = openTabs.find { it.id != activeTab.id }?.id ?: activeTab.id
+                                                viewModel.selectedPane = 0
+                                            }
+                                        }
+                                    },
+                                    enabled = activeTab != null,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Splitscreen,
+                                            contentDescription = "Split Screen",
+                                            tint = if (viewModel.isSplitScreenEnabled) Color(0xFF50FA7B) else theme.textColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Search & Replace
+                                DropdownMenuItem(
+                                    text = { Text("Search & Replace", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        viewModel.isSearchActive = !viewModel.isSearchActive
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = "Search & Replace",
+                                            tint = Color(0xFFFF79C6),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Version History
+                                DropdownMenuItem(
+                                    text = { Text("Version History", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        if (activeTab != null) {
+                                            viewModel.loadVersionHistoryForActiveFile()
+                                            selectedSnapshotForDiff = null
+                                            showVersionHistoryDialog = true
+                                        }
+                                    },
+                                    enabled = activeTab != null,
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = "Version History",
+                                            tint = Color(0xFFBD93F9),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Quick Action Shortcuts
+                                DropdownMenuItem(
+                                    text = { Text("Quick Action Shortcuts", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showQuickActionDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.FlashOn,
+                                            contentDescription = "Quick Actions",
+                                            tint = Color(0xFFF1FA8C),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                // Theme Selector
+                                DropdownMenuItem(
+                                    text = { Text("Editor Color Theme", color = theme.textColor, fontSize = 14.sp) },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showThemeSelectorDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Palette,
+                                            contentDescription = "Editor Themes",
+                                            tint = Color(0xFFFFB86C),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                                
+                                HorizontalDivider(color = if (theme.isDark) Color(0xFF44475A) else Color(0xFFE2E8F0))
+                                
+                                // Toggle Line Numbers Row
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Show Line Numbers", color = theme.textColor, fontSize = 14.sp)
+                                            Switch(
+                                                checked = viewModel.showLineNumbers,
+                                                onCheckedChange = { viewModel.showLineNumbers = it },
+                                                modifier = Modifier.scale(0.8f)
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.showLineNumbers = !viewModel.showLineNumbers
+                                    }
+                                )
+                                
+                                // Toggle Auto-Suggestions Row
+                                DropdownMenuItem(
+                                    text = { 
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("Auto-Suggestions", color = theme.textColor, fontSize = 14.sp)
+                                            Switch(
+                                                checked = viewModel.enableAutoComplete,
+                                                onCheckedChange = { viewModel.enableAutoComplete = it },
+                                                modifier = Modifier.scale(0.8f)
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.enableAutoComplete = !viewModel.enableAutoComplete
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -300,6 +463,15 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                // File extension icon
+                                val (tabIcon, tabIconTint) = com.example.ui.components.LanguageIconHelper.getIconAndColor(tab.fileName, false)
+                                Icon(
+                                    imageVector = tabIcon,
+                                    contentDescription = null,
+                                    tint = tabIconTint,
+                                    modifier = Modifier.size(14.dp)
+                                )
+
                                 Text(
                                     text = tab.fileName + (if (tab.isUnsaved) " *" else ""),
                                     style = TextStyle(
@@ -361,6 +533,7 @@ fun EditorScreen(viewModel: AppViewModel, modifier: Modifier = Modifier) {
                 .fillMaxSize()
                 .background(theme.background)
                 .padding(innerPadding)
+                .imePadding()
         ) {
             // Search and Replace overlay
             AnimatedVisibility(
